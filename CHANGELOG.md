@@ -21,3 +21,5 @@
 - Vollständige Prüfung der Profil-4-GPIO- und Audio-Konfiguration für einen und zwei Anschlüsse ergänzt.
 - Hash- und Metadatenvergleich echter Systemdateien ergänzt.
 - Profil-4-Test klar als Simulation ohne Hardwarevalidierung gekennzeichnet.
+- Profil-4-Funktionssimulation zusätzlich auf Debian 13 erfolgreich ausgeführt.
+- ShellCheck dort mangels installiertem Programm nicht ausgeführt; bereits auf dem Entwicklungsrechner bestanden.

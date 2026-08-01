@@ -42,6 +42,9 @@
 ### `tests/simulate_elenata.sh`
 
 - Zweck: sichere Funktionssimulation der Profil-4-Komponenten ohne Root. Der Test ist kein vollständiger Root-Installationslauf und keine Hardwarevalidierung.
+- Testlauf in Debian 13 VM `svxlink-test` auf Commit `8781d0b`: ohne `sudo` ausgeführt, alle Testfälle bestanden und die überwachten echten Dateien blieben unverändert.
+- ShellCheck wurde in dieser Debian-13-VM nicht durchgeführt, da das Programm nicht installiert war. ShellCheck wurde separat auf dem Entwicklungsrechner erfolgreich ausgeführt.
+- Hardwarevalidierung bleibt offen.
 - Der Test arbeitet ausschließlich in einem mit `mktemp -d` erzeugten Verzeichnis und entfernt dieses per `trap`.
 - Produktionspfade sind nur mit `SVXLINK_TEST_MODE=true` überschreibbar. Ohne Testmodus gelten die festen Produktionspfade.
 - Die Raspberry-Pi-Simulation ist nur mit `SVXLINK_TEST_MODE=true` und `SVXLINK_TEST_RASPBERRY_PI=true` aktiv.

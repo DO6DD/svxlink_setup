@@ -2,7 +2,7 @@
 
 - Aktueller Branch: `project-documentation`
 - Aktueller Stand: Debian-13-VM-Basistest bestanden.
-- Letzter bekannter getesteter Commit: `d11f11bbf1f28450dbae11bb9fe2f635de99b5aa`
+- Letzter bekannter getesteter Commit: `8781d0b`
 
 ## Fertig
 
@@ -11,6 +11,8 @@
 - `tests/simulate_elenata.sh` prüft Profil 4 als Funktionssimulation ohne Root und ausschließlich mit temporären Dateien aus `mktemp -d`.
 - Hash- und Metadatenvergleich bestätigte unveränderte überwachte Dateien unter `/boot` und `/etc`.
 - Bootkonfiguration, SvxLink-Konfiguration, GPIO-Zuordnung, ALSA-Aufrufe, Idempotenz und definierte Fehlerfälle sind simuliert geprüft.
+- Profil-4-Funktionssimulation zusätzlich direkt in der Debian-13-VM `svxlink-test` ohne `sudo` erfolgreich ausgeführt; alle Testfälle meldeten `PASS`.
+- ShellCheck war in der Debian-13-VM nicht installiert und wurde dort nicht ausgeführt; auf dem Entwicklungsrechner wurde ShellCheck erfolgreich ausgeführt.
 
 ## Offen
 
