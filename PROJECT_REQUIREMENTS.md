@@ -54,3 +54,4 @@
 - Für `de_DE-anna-16k` ist derzeit keine aktuelle, verlässlich lizenzierte Quelle bestätigt. Es wird nicht blind heruntergeladen.
 - Ein späterer Installer benötigt einen vollständigen Sprachsatz unter `/usr/share/svxlink/sounds/de_DE`, entweder als Verzeichnis oder als Symlink auf einen vollständigen Sprachsatz. Verzeichnisse müssen für `svxlink` lesbar und durchsuchbar sein; bei lokaler Installation werden Eigentümer `svxlink:svxlink`, Dateien `0644` und Verzeichnisse `0755` verwendet.
 - Eine spätere Soundinstallation muss vorhandene deutsche Sounds erkennen oder sichern, nur bei fehlender beziehungsweise veralteter geprüfter Quelle laden und einen unvollständigen Satz als Fehler melden.
+- Solange `/usr/share/svxlink/sounds/de_DE` fehlt, bleibt die aktive RepeaterLogic auf `en_US`, damit sie mit vorhandenen Standardsounds funktionsfähig bleibt. Das Script meldet die vorbereitete, aber noch nicht aktivierte deutsche Sprache als Warnung.

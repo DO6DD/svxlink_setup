@@ -28,6 +28,7 @@ SECOND_CONNECTOR=false
 CALLSIGN=""
 CAPTURE_LEFT=6
 CAPTURE_RIGHT=6
+GERMAN_SOUNDS_AVAILABLE=false
 
 log() {
     printf '%s: %s\n' "${SCRIPT_NAME}" "$*"
@@ -403,14 +404,56 @@ configure_elenata_svxlink() {
     fi
 }
 
-configure_callsign() {
-    [[ -f ${SVXLINK_CONFIG} ]] || return 0
-    if ! grep -qE '^[[:space:]]*CALLSIGN=MYCALL[[:space:]]*$' "${SVXLINK_CONFIG}"; then
-        log "CALLSIGN=MYCALL placeholder is unavailable; callsign was not changed."
-        return 0
+ini_value() {
+    local file=$1 section=$2 key=$3
+    awk -v section="${section}" -v key="${key}" '
+        $0 == "[" section "]" { in_section=1; next }
+        /^\[/ { in_section=0 }
+        in_section && $0 ~ "^" key "=" { print substr($0, length(key) + 2); exit }
+    ' "${file}"
+}
+
+section_contains_placeholder() {
+    local file=$1 section=$2
+    awk -v section="${section}" '
+        $0 == "[" section "]" { in_section=1; next }
+        /^\[/ { in_section=0 }
+        in_section && ($0 ~ /MYCALL|example\.org|Change this key now/) { found=1 }
+        END { exit !found }
+    ' "${file}"
+}
+
+validate_base_svxlink_configuration() {
+    [[ $(ini_value "${SVXLINK_CONFIG}" "GLOBAL" "LOGICS") == "RepeaterLogic" ]] || \
+        die "SvxLink configuration validation failed: LOGICS must be RepeaterLogic."
+    grep -Fqx '[RepeaterLogic]' "${SVXLINK_CONFIG}" || \
+        die "SvxLink configuration validation failed: [RepeaterLogic] is missing."
+    [[ $(ini_value "${SVXLINK_CONFIG}" "RepeaterLogic" "CALLSIGN") == "${CALLSIGN}" ]] || \
+        die "SvxLink configuration validation failed: RepeaterLogic CALLSIGN does not match the input."
+    if section_contains_placeholder "${SVXLINK_CONFIG}" "GLOBAL" || \
+        section_contains_placeholder "${SVXLINK_CONFIG}" "RepeaterLogic"; then
+        die "SvxLink configuration validation failed: active configuration contains a placeholder."
     fi
+}
+
+configure_base_svxlink() {
+    [[ -f ${SVXLINK_CONFIG} ]] || die "SvxLink configuration not found: ${SVXLINK_CONFIG}"
+    grep -Fqx '[GLOBAL]' "${SVXLINK_CONFIG}" || die "SvxLink configuration is missing [GLOBAL]."
+    grep -Fqx '[RepeaterLogic]' "${SVXLINK_CONFIG}" || die "SvxLink configuration is missing [RepeaterLogic]."
+
     backup_file "${SVXLINK_CONFIG}"
-    sed -i -E "0,/^[[:space:]]*CALLSIGN=MYCALL[[:space:]]*$/s//CALLSIGN=${CALLSIGN}/" "${SVXLINK_CONFIG}"
+    set_ini_value "${SVXLINK_CONFIG}" "GLOBAL" "LOGICS" "RepeaterLogic"
+    set_ini_value "${SVXLINK_CONFIG}" "RepeaterLogic" "CALLSIGN" "${CALLSIGN}"
+    if grep -Fqx '[SimplexLogic]' "${SVXLINK_CONFIG}"; then
+        set_ini_value "${SVXLINK_CONFIG}" "SimplexLogic" "CALLSIGN" "${CALLSIGN}"
+    fi
+    if [[ -d ${SVXLINK_SOUNDS_DIR}/de_DE ]]; then
+        set_ini_value "${SVXLINK_CONFIG}" "RepeaterLogic" "DEFAULT_LANG" "de_DE"
+        GERMAN_SOUNDS_AVAILABLE=true
+    else
+        set_ini_value "${SVXLINK_CONFIG}" "RepeaterLogic" "DEFAULT_LANG" "en_US"
+    fi
+    validate_base_svxlink_configuration
 }
 
 build_svxlink() {
@@ -436,6 +479,7 @@ build_svxlink() {
 }
 
 configure_logging() {
+    local output
     touch "${SVXLINK_LOG}"
     chown "${SVXLINK_USER}:${SVXLINK_GROUP}" "${SVXLINK_LOG}"
     chmod 0644 "${SVXLINK_LOG}"
@@ -452,7 +496,13 @@ configure_logging() {
     su svxlink svxlink
 }
 EOF
-    logrotate -d "${LOGROTATE_CONFIG}"
+    if ! output=$(logrotate -d "${LOGROTATE_CONFIG}" 2>&1); then
+        log "ERROR: Logrotate configuration validation failed."
+        printf '%s\n' "${output}" | sed -n '1,3p' | while IFS= read -r line; do
+            log "ERROR: logrotate: ${line}"
+        done
+        return 1
+    fi
 }
 
 enable_svxlink_service() {
@@ -580,17 +630,20 @@ main() {
     fi
     build_svxlink
     configure_logging
-    configure_callsign
+    configure_base_svxlink
     if [[ ${HARDWARE_PROFILE} == 4 ]]; then
         configure_elenata_svxlink
         configure_elenata_alsa
         log "ELENATA boot configuration was prepared. Reboot before putting the station into service."
     fi
-    log "Standard RepeaterLogic remains active; local extensions stay available in ${SVXLINK_EVENTS_DIR}, ${SVXLINK_EVENTS_LOCAL_DIR} and ${SVXLINK_CONFIG_DIR}."
+    log "Standard RepeaterLogic is active; local extensions stay available in ${SVXLINK_EVENTS_DIR}, ${SVXLINK_EVENTS_LOCAL_DIR} and ${SVXLINK_CONFIG_DIR}."
     log "German sound resources are expected below ${SVXLINK_SOUNDS_DIR}; no unverified source is downloaded."
     enable_svxlink_service
+    if ! ${GERMAN_SOUNDS_AVAILABLE}; then
+        log "WARN: RepeaterLogic is prepared for de_DE, but German sound files are not installed."
+    fi
     if [[ ${HARDWARE_PROFILE} == 0 ]]; then
-        log "Base installation completed. Hardware configuration is still required before starting operation."
+        log "Base installation completed. Profile 0 does not create a productive audio, PTT or squelch configuration."
     else
         log "Installation completed. Verify the hardware with sudo ./${SCRIPT_NAME} --check before starting operation."
     fi
