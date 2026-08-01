@@ -80,6 +80,7 @@ BUILD_DIR=""
 BOOT_CONFIG=""
 OS_VERSION=""
 OS_ID=""
+OS_SUPPORTED=true
 IS_RASPBERRY_PI=false
 HARDWARE_PROFILE=0
 SECOND_CONNECTOR=false
@@ -137,7 +138,6 @@ show_header() {
     printf '|%-*s|\n' "${width}" 'Basierend auf svxlink_setup von DF5KX & DO6NP'
     printf '|%-*s|\n' "${width}" 'Weiterentwickelt und angepasst von DO6DD'
     printf '+%*s+\n' "${width}" '' | tr ' ' '-'
-    printf '\nDieses Programm muss als Root gestartet werden.\n\nAufruf:\n  sudo ./svxlink_setup.sh\n'
 }
 
 log() {
@@ -176,21 +176,29 @@ on_error() {
 }
 trap on_error ERR
 
-require_root() {
+print_root_required_error() {
+    local action=${1:-}
+    local invocation="sudo ./${SCRIPT_NAME}"
+    [[ -z ${action} || ${action} == --menu ]] || invocation+=" ${action}"
+    print_error 'Root-Rechte erforderlich.'
+    printf '\nBitte starte diese Aktion mit:\n\n  %s\n' "${invocation}" >&2
+}
+
+require_root_for_action() {
+    local action=${1:-}
     if [[ ${SVXLINK_TEST_MODE:-false} == true ]]; then
         return 0
     fi
     if [[ ${EUID} -ne 0 ]]; then
-        printf '%s\n' 'FEHLER: Root-Rechte erforderlich.' >&2
-        printf '\n' >&2
-        printf '%s\n' 'Bitte starte das Programm mit:' >&2
-        printf '\n' >&2
-        printf '%s\n' "  sudo ./${SCRIPT_NAME}" >&2
-        exit 1
+        print_root_required_error "${action}"
+        return 1
     fi
     [[ -n ${INSTALL_USER} ]] && return 0
     resolve_install_user
 }
+
+# Compatibility helper for existing function tests.
+require_root() { require_root_for_action; }
 
 resolve_install_user() {
     INSTALL_USER=${SUDO_USER:-root}
@@ -552,6 +560,7 @@ activate_sound_language() {
 }
 
 detect_operating_system() {
+    local allow_unsupported=${1:-false}
     if [[ ${SVXLINK_TEST_MODE:-false} == true && ${SVXLINK_TEST_RASPBERRY_PI:-false} == true ]]; then
         IS_RASPBERRY_PI=true
         BOOT_CONFIG=${BOOT_CONFIG_FILE:?BOOT_CONFIG_FILE is required in test mode}
@@ -569,12 +578,18 @@ detect_operating_system() {
     OS_VERSION=${VERSION_ID:-}
     OS_ID=${ID:-}
 
+    OS_SUPPORTED=true
     case ${ID:-} in
         debian|raspbian) ;;
-        *) die "Unsupported operating system: ${PRETTY_NAME:-unknown}. Only Debian 12/13 and Raspberry Pi OS are supported." ;;
+        *)
+            OS_SUPPORTED=false
+            ${allow_unsupported} || die "Unsupported operating system: ${PRETTY_NAME:-unknown}. Only Debian 12/13 and Raspberry Pi OS are supported."
+            ;;
     esac
-    [[ ${OS_VERSION} == "12" || ${OS_VERSION} == "13" ]] || \
-        die "Unsupported Debian version: ${OS_VERSION:-unknown}. Only Debian 12 and 13 are supported."
+    if [[ ${OS_VERSION} != "12" && ${OS_VERSION} != "13" ]]; then
+        OS_SUPPORTED=false
+        ${allow_unsupported} || die "Unsupported Debian version: ${OS_VERSION:-unknown}. Only Debian 12 and 13 are supported."
+    fi
 
     if [[ -r /proc/device-tree/model ]] && tr -d '\0' </proc/device-tree/model | grep -qi 'raspberry pi'; then
         IS_RASPBERRY_PI=true
@@ -1073,8 +1088,59 @@ build_options_hash() {
 }
 
 source_commit() { git -C "${SOURCE_DIR}" rev-parse HEAD; }
-source_version() { git -C "${SOURCE_DIR}" describe --tags --exact-match 2>/dev/null || git -C "${SOURCE_DIR}" describe --tags --always; }
-installed_svxlink_version() { svxlink --version 2>/dev/null | awk 'match($0, /[0-9]+\.[0-9]+\.[0-9]+/) { print substr($0, RSTART, RLENGTH); exit }'; }
+
+# Print precisely one normalized release version, or nothing when the input is
+# ambiguous.  In particular, never select an arbitrary embedded SemVer value.
+normalize_svxlink_release_version() {
+    local line candidate='' found='' labelled_found='' combined_found='' version_re='[0-9]+\.[0-9]+\.[0-9]+'
+    while IFS= read -r line || [[ -n ${line} ]]; do
+        line=${line//$'\r'/}
+        line=$(printf '%s' "${line}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        # SvxLink embeds component@release, for example 1.10.1@26.05.1.
+        if [[ ${line} =~ @(${version_re})([^0-9.]|$) ]]; then
+            candidate=${BASH_REMATCH[1]}
+            if [[ -z ${combined_found} ]]; then combined_found=${candidate}; elif [[ ${combined_found} != "${candidate}" ]]; then return 1; fi
+            continue
+        elif [[ ${line} =~ ^(SvxLink[[:space:]]+v?|[Vv]ersion:[[:space:]]*|v)(${version_re})$ ]]; then
+            candidate=${BASH_REMATCH[2]}
+            if [[ -z ${labelled_found} ]]; then labelled_found=${candidate}; elif [[ ${labelled_found} != "${candidate}" ]]; then return 1; fi
+            continue
+        elif [[ ${line} =~ ^${version_re}$ ]]; then
+            candidate=${line}
+        else
+            continue
+        fi
+        if [[ -z ${found} ]]; then found=${candidate}; elif [[ ${found} != "${candidate}" ]]; then return 1; fi
+    done
+    [[ -z ${combined_found} ]] || { printf '%s\n' "${combined_found}"; return 0; }
+    [[ -z ${labelled_found} ]] || { printf '%s\n' "${labelled_found}"; return 0; }
+    [[ ${found} =~ ^${version_re}$ ]] || return 1
+    printf '%s\n' "${found}"
+}
+
+source_version() {
+    local raw
+    raw=$(git -C "${SOURCE_DIR}" describe --tags --exact-match 2>/dev/null || git -C "${SOURCE_DIR}" describe --tags --always)
+    normalize_svxlink_release_version <<<"${raw}" || printf '%s\n' "${raw#v}"
+}
+
+installed_svxlink_version() {
+    local output version binary
+    output=$(svxlink --version 2>/dev/null || true)
+    # A combined component@release token is authoritative, whether emitted by
+    # the program or discovered as a controlled binary fallback.
+    if [[ ${output} == *'@'* ]]; then
+        version=$(normalize_svxlink_release_version <<<"${output}" || true)
+        [[ -n ${version} ]] && { printf '%s\n' "${version}"; return 0; }
+    fi
+    binary=$(command -v svxlink 2>/dev/null || true)
+    if [[ -n ${binary} && -r ${binary} ]] && strings "${binary}" 2>/dev/null | grep -Eq '@[0-9]+\.[0-9]+\.[0-9]+'; then
+        version=$(strings "${binary}" 2>/dev/null | normalize_svxlink_release_version || true)
+        [[ -n ${version} ]] && { printf '%s\n' "${version}"; return 0; }
+    fi
+    # Only now accept an unambiguous official program output.
+    normalize_svxlink_release_version <<<"${output}"
+}
 
 read_build_state() {
     local line key value
@@ -1137,6 +1203,24 @@ build_required_reason() {
     return 1
 }
 
+log_build_comparison() {
+    local installed_version current_version current_commit
+    installed_version=$(installed_svxlink_version || true)
+    current_version=$(source_version)
+    current_commit=$(source_commit)
+    read_build_state
+    start_install_log || return 1
+    {
+        printf 'Installierte Releaseversion: %s\n' "${installed_version:-nicht eindeutig ermittelbar}"
+        printf 'Quellversion:                %s\n' "${current_version}"
+        printf 'Aktueller Quellcommit:       %s\n' "${current_commit}"
+        printf 'Buildstatus-Commit:          %s\n' "${BUILD_STATE_COMMIT:-nicht vorhanden}"
+        printf 'Buildstatus-Version:         %s\n' "${BUILD_STATE_VERSION:-nicht vorhanden}"
+    } >>"${INSTALL_LOG_FILE}"
+    if [[ -n ${installed_version} ]]; then print_success "Installierte SvxLink-Version: ${installed_version}"; else print_warning 'Installierte SvxLink-Version konnte nicht eindeutig ermittelt werden.'; fi
+    print_success "Quellversion: ${current_version}"
+}
+
 prepare_svxlink_source() {
     local before after
     if [[ -d ${SOURCE_DIR}/.git ]]; then
@@ -1159,8 +1243,9 @@ prepare_svxlink_source() {
 build_svxlink() {
     local force=${1:-false} reason
     prepare_svxlink_source || return 1
+    log_build_comparison || return 1
     if ! reason=$(build_required_reason "${force}"); then
-        print_success "SvxLink $(installed_svxlink_version) ist bereits aktuell."
+        print_success 'SvxLink ist unverändert und vollständig installiert.'
         print_info 'Kompilierung und Installation werden übersprungen.'
         return 0
     fi
@@ -1265,11 +1350,10 @@ check_svxlink_audio_access() {
 
 run_checks() {
     local callsign profile service_active
-    require_root
-    detect_operating_system
+    detect_operating_system true
     print_section 'SYSTEMSTAND'
     printf 'System\n'
-    print_success "Betriebssystem: Debian/Raspberry Pi OS ${OS_VERSION}"
+    if ${OS_SUPPORTED}; then print_success "Betriebssystem: Debian/Raspberry Pi OS ${OS_VERSION}"; else print_warning "Nicht unterstütztes System (nur Status, keine Änderungen): ${OS_ID:-unknown} ${OS_VERSION:-unknown}"; fi
     if ${IS_RASPBERRY_PI}; then print_info 'Raspberry Pi: ja'; else print_info 'Raspberry Pi: nein'; fi
     print_info "Architektur: $(uname -m)"
     if ${IS_RASPBERRY_PI}; then
@@ -1433,7 +1517,7 @@ EOF
 
 run_installation() {
     local mode=${1:-automatic} existing_profile existing_callsign
-    require_root
+    require_root_for_action --install || return 1
     detect_operating_system
     log "Detected Debian/Raspberry Pi OS ${OS_VERSION}; Raspberry Pi: ${IS_RASPBERRY_PI}."
     if ${HARDWARE_PROFILE_PROVIDED} && ! ${IS_RASPBERRY_PI} && [[ ${HARDWARE_PROFILE} != 0 ]]; then
@@ -1601,6 +1685,7 @@ EOF
                 if run_installation automatic; then return 0; else return $?; fi
                 ;;
             2)
+                require_root_for_action --install || return 1
                 cat <<'EOF'
 Dieser Modus ist für beschädigte oder unvollständige Installationen vorgesehen.
 
@@ -1642,7 +1727,6 @@ EOF
 
 run_menu() {
     local choice
-    require_root
     while :; do
         show_header
         show_menu
@@ -1650,11 +1734,11 @@ run_menu() {
         case ${choice} in
             1) install_menu || print_error 'Installationsaktion wurde nicht vollständig abgeschlossen.' ;;
             2) run_checks; read -r -p "ENTER zum Hauptmenü ..." _ ;;
-            3) backup_menu ;;
-            4) install_sound_interactively de_DE || log "German sound installation failed." ;;
-            5) install_sound_interactively en_US || log "English sound installation failed." ;;
-            6) show_german_activation_information; activate_sound_language de_DE true || log "German was not activated." ;;
-            7) activate_sound_language en_US true || log "English was not activated." ;;
+            3) require_root_for_action --backup && backup_menu ;;
+            4) if require_root_for_action --install-german-sounds; then install_sound_interactively de_DE || log "German sound installation failed."; fi ;;
+            5) if require_root_for_action --install-english-sounds; then install_sound_interactively en_US || log "English sound installation failed."; fi ;;
+            6) if require_root_for_action --activate-german-sounds; then show_german_activation_information; activate_sound_language de_DE true || log "German was not activated."; fi ;;
+            7) if require_root_for_action --activate-english-sounds; then activate_sound_language en_US true || log "English was not activated."; fi ;;
             8) show_configuration ;;
             9) return 0 ;;
             *) log "Ungültige Auswahl." ;;
@@ -1678,7 +1762,6 @@ EOF
 main() {
     local action="" argument
     if (( $# == 0 )); then
-        require_root
         main_menu
         return 0
     fi
@@ -1705,13 +1788,13 @@ main() {
     done
     [[ -n ${action} ]] || die "An action parameter is required when options are supplied. Use --help."
     [[ ${action} != --help ]] || { show_help; return 0; }
-    require_root
     case ${action} in
         --menu) main_menu ;;
         --check) run_checks ;;
         --show-config) show_configuration ;;
         --install|--install-german-sounds|--install-english-sounds|--activate-german-sounds|--activate-english-sounds)
             ${ACTION_YES} || die "Non-interactive write actions require --yes."
+            require_root_for_action "${action}" || return 1
             case ${action} in
                 --install) run_installation automatic ;;
                 --install-german-sounds) install_german_sounds ;;

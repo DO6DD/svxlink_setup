@@ -20,6 +20,7 @@
 - Die Rechteverwaltung für deutsche und englische Sounds normalisiert ausschließlich `de_DE` beziehungsweise `en_US` auf `svxlink:svxlink`, Verzeichnisse `0755` und reguläre Dateien `0644`.
 - Der reale Debian-13-VM-Updatepfad erkannte Rufzeichen und Profil 0 korrekt und baute SvxLink 26.05.1 erneut. Er brach danach wegen der fehlenden `curl`-Abhängigkeit ab; ein Wiederholungstest nach der Korrektur steht aus.
 - Der getestete VM-Lauf erzeugte bei unverändertem Quellstand noch einen vollständigen Neuaufbau. Die neue Build-Skip-Logik mit persistentem Buildstatus ist simuliert geprüft; ein erneuter VM-Test steht aus.
+- Die Ursache dieses Neuaufbaus ist eingegrenzt: `svxlink --version` meldete die interne Kennung `1.10.1`, während die Binärdatei `1.10.1@26.05.1` enthält. Der Parser ermittelt nun gezielt die Releaseversion `26.05.1`; der erneute unveränderte VM-Skip-Test steht weiterhin aus.
 
 ## Offen
 
@@ -28,6 +29,7 @@
 - Aktuelle Raspberry-Pi-OS- und Debian-13-Hardwaretests für ICS Pi-Repeater, uSvxCard und WM8960 Audio-HAT.
 - Echtes Installations- und Hörtest-Ergebnis für die eingebetteten deutschen und offiziellen englischen Sounds.
 - Erneuter Debian-13-VM-Update- und Soundtest nach Aufnahme von `curl`, `tar` und `bzip2` in die Grundabhängigkeiten.
+- Erneuter realer Debian-13-VM-Lauf, der den Build-Skip nach der Parserkorrektur bestätigt.
 - Externe deutsche RepeaterLogic.
 
 ## Grenzen der Profil-4-Simulation

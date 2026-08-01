@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Korrigierte SvxLink-Releaseerkennung: Die interne Komponentenkennung `1.10.1` wird nicht mehr als Release mit `26.05.1` verwechselt. Bei `1.10.1@26.05.1` wird gezielt `26.05.1` verwendet; nicht eindeutige Werte erzwingen sicher einen Neuaufbau.
+- `--help`, `--check` und `--show-config` sowie das Hauptmenü sind ohne Root nutzbar. Root wird erst vor schreibenden Aktionen verlangt; der sudo-Hinweis erscheint nur in diesem Fehlerfall.
+
 - Projektanforderungen und Testgrundlage dokumentiert.
 - Erster Modernisierungsstand für Debian 12/13 und ELENATA Wolfson / Fe-Pi Audio dokumentiert.
 - Deutsche RepeaterLogic bewusst auf eine spätere Integrationsphase verschoben; der Basisinstaller bleibt bei der Standard-RepeaterLogic.

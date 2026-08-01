@@ -33,10 +33,17 @@ BUILD_DIR="${SOURCE_DIR}/build"
 INSTALL_USER="$(id -un)"
 mkdir -p "${SOURCE_DIR}/.git"
 mkdir -p "${TEMP_DIR}/bin"
-printf '#!/usr/bin/env bash\nprintf "SvxLink v26.05.1\\n"\n' >"${TEMP_DIR}/bin/svxlink"
+printf '#!/usr/bin/env bash\nprintf "SvxLink v1.10.1\\n1.10.1@26.05.1\\n"\n' >"${TEMP_DIR}/bin/svxlink"
 chmod 0755 "${TEMP_DIR}/bin/svxlink"
 PATH="${TEMP_DIR}/bin:${PATH}"
 detect_operating_system
+
+expect "$(normalize_svxlink_release_version <<<'SvxLink v1.10.1')" 1.10.1 'labelled component version is normalized but not fabricated as release version'
+expect "$(normalize_svxlink_release_version <<<'1.10.1@26.05.1')" 26.05.1 'combined component@release selects the release part'
+expect "$(printf '1.10.1\nSvxLink v26.05.1\n' | normalize_svxlink_release_version)" 26.05.1 'labelled release version is selected over unrelated version tokens'
+expect "$(normalize_svxlink_release_version <<<'  Version: 26.05.1  ')" 26.05.1 'prefixes and whitespace are removed'
+if normalize_svxlink_release_version <<<'component 1.10.1 and 26.05.1' >/dev/null; then fail 'embedded arbitrary SemVer tokens are not selected'; else pass 'embedded arbitrary SemVer tokens are rejected'; fi
+expect "$(installed_svxlink_version)" 26.05.1 'installed version uses combined release marker instead of first component version'
 
 git() {
     if [[ $* == *'rev-parse HEAD'* ]]; then printf '%s\n' abcdef1234567890; return 0; fi
@@ -54,6 +61,11 @@ write_build_state
 [[ -f ${BUILD_STATE_FILE} ]] && pass 'successful build state is written atomically' || fail 'successful build state is written atomically'
 expect "$(stat -c '%a' "${BUILD_STATE_FILE}")" 644 'build state mode'
 if build_required_reason false >/dev/null; then fail 'matching state must skip build'; else pass 'matching commit, version and platform skip build'; fi
+prepare_svxlink_source() { :; }
+log_build_comparison() { :; }
+run_logged() { printf 'BUILD_COMMAND_CALLED\n'; }
+skip_output=$(build_svxlink false)
+[[ ${skip_output} != *BUILD_COMMAND_CALLED* ]] && pass 'matching state skips CMake, build and install commands' || fail 'matching state must not call build commands'
 if reason=$(build_required_reason true); then [[ ${reason} == 'Erzwungene Neuinstallation' ]] && pass 'force always requires build' || fail 'force reason'; else fail 'force must require build'; fi
 
 sed -i 's/^SVXLINK_GIT_COMMIT=.*/SVXLINK_GIT_COMMIT=other/' "${BUILD_STATE_FILE}"

@@ -131,7 +131,9 @@ Die Profile 1 bis 3 wurden aus der historischen Installer-Implementierung wieder
 
 Das Skript geht davon aus, dass wir es mit einem frisch installierten Raspberry Pi oder PC zu tun haben, auf dem das aktuelle Raspbian oder Debian 11 "Bookworm" installiert ist. 
 
-Der Produktivstart benötigt Root-Rechte: `sudo ./svxlink_setup.sh`. Ohne Root bricht das Programm vor Systemänderungen ab. Bei einem Start über `sudo` werden Quell- und Build-Verzeichnisse über `SUDO_USER` im Home des aufrufenden Benutzers angelegt; ein direkter Root-Login verwendet bewusst `/root`. Der isolierte Testmodus benötigt keine Root-Rechte.
+Die read-only Aufrufe `./svxlink_setup.sh --help`, `--check` und `--show-config` sowie das Hauptmenü funktionieren ohne Root. Erst schreibende Aktionen benötigen Root und nennen bei fehlenden Rechten die passende `sudo`-Variante. Bei einem Start über `sudo` werden Quell- und Build-Verzeichnisse über `SUDO_USER` im Home des aufrufenden Benutzers angelegt; ein direkter Root-Login verwendet bewusst `/root`. Der isolierte Testmodus benötigt keine Root-Rechte.
+
+Beim Update wird die SvxLink-Releaseversion normalisiert verglichen. Die in manchen Binärdateien sichtbare interne Kennung `1.10.1` ist nicht die Releaseversion: Aus `1.10.1@26.05.1` wird gezielt `26.05.1` ermittelt. Ist die Releaseversion nicht eindeutig feststellbar, wird aus Sicherheitsgründen neu gebaut.
 
 Für die Sprachordner `de_DE` und `en_US` werden jeweils nur der gewählte Ordner und dessen reguläre Dateien berechtigt: `svxlink:svxlink`, Verzeichnisse `0755`, reguläre Dateien `0644`. Andere Sprachen und Ziele symbolischer Links bleiben unverändert.
 

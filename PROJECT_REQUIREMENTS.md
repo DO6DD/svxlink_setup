@@ -38,7 +38,8 @@
 
 - Unterstützt werden Debian 12, Debian 13 sowie darauf basierende Raspberry-Pi-OS-Versionen.
 - Raspberry-Pi-Hardwareprofile sind: Profil 0 ohne spezielles Interface, Profil 1 ICS Pi-Repeater, Profil 2 uSvxCard, Profil 3 WM8960 Audio-HAT und Profil 4 ELENATA Wolfson / Fe-Pi Audio. TL5 wird nicht unterstützt.
-- Das Programm wird produktiv als Root mit `sudo ./svxlink_setup.sh` gestartet; ein unprivilegierter Start bricht vor Systemänderungen mit Exitcode 1 ab. Im Testmodus ist kein Root erforderlich.
+- `--help`, `--check`, `--show-config` und das Hauptmenü sind read-only ohne Root verfügbar. Schreibende Aktionen verlangen erst unmittelbar vor der Änderung Root und nennen dann die passende `sudo ./svxlink_setup.sh`-Variante; im Testmodus ist ebenfalls kein Root erforderlich.
+- Für den Build-Skip wird ausschließlich eine normalisierte SvxLink-Releaseversion verglichen. Die interne Kennung `1.10.1` ist keine Releaseversion; aus `1.10.1@26.05.1` wird gezielt `26.05.1` ermittelt. Nicht eindeutige Erkennung bedeutet sicherer Neuaufbau.
 - Für Quellcode und Build-Verzeichnisse wird `SUDO_USER` mit dem über `getent` ermittelten Home-Verzeichnis verwendet. Ein direkter Root-Login verwendet ausdrücklich `/root`.
 - Der Prüfmodus `--check` meldet System-, Dienst-, Log-, Audio- und Update-Status. Hardwareergebnisse bleiben bis zum echten Test nicht hardwarevalidiert.
 - Nicht-Raspberry-Pi-Systeme erhalten automatisch Profil 0; Profil 0 erzeugt keine produktive Audio-, PTT- oder Squelch-Konfiguration.

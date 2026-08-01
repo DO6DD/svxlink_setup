@@ -32,20 +32,19 @@ install_packages() { printf 'PACKAGE_COMMAND_CALLED\n'; }
 
 nonroot_output="${TEMP_DIR}/nonroot.out"
 if env -u SVXLINK_TEST_MODE bash "${ROOT}/svxlink_setup.sh" --show-config >"${nonroot_output}" 2>&1; then
-    fail 'production start without root must fail'
+    pass 'production show-config works without root'
 else
-    pass 'production start without root fails'
+    fail 'production show-config must work without root'
 fi
-expect "$(grep -Fxc 'FEHLER: Root-Rechte erforderlich.' "${nonroot_output}" || true)" 1 'root error is clear'
-grep -Fqx '  sudo ./svxlink_setup.sh' "${nonroot_output}" && pass 'root error names sudo invocation' || fail 'root error names sudo invocation'
+if grep -Fq 'Root-Rechte erforderlich' "${nonroot_output}"; then fail 'read-only show-config has no root error'; else pass 'read-only show-config has no root error'; fi
 
 header=$(show_header)
-[[ ${header} == *'Dieses Programm muss als Root gestartet werden.'* && ${header} == *'sudo ./svxlink_setup.sh'* ]] && pass 'root hint is visible in header' || fail 'root hint is visible in header'
+[[ ${header} != *'Root gestartet'* && ${header} != *'sudo ./svxlink_setup.sh'* ]] && pass 'header contains no repeated root hint' || fail 'header contains no repeated root hint'
 header_frame=$(printf '%s\n' "${header}" | awk '/^[+|]/')
 header_length=$(printf '%s\n' "${header_frame}" | awk 'NR == 1 { width=length($0) } length($0) != width { bad=1 } END { print bad ? "bad" : width }')
 expect "${header_length}" 65 'all header frame lines have identical length'
 if printf '%s\n' "${header_frame}" | awk '/^\|/ && ($0 !~ /^\|.*\|$/ || /\t/) { bad=1 } END { exit bad }'; then pass 'header content lines have fixed borders and no tabs'; else fail 'header content lines have fixed borders and no tabs'; fi
-[[ ${header} == *$'+---------------------------------------------------------------+\n\nDieses Programm'* ]] && pass 'header has exactly one blank line after frame' || fail 'header has exactly one blank line after frame'
+[[ ${header} == *'+---------------------------------------------------------------+' ]] && pass 'header frame is complete' || fail 'header frame is complete'
 require_root && pass 'test mode bypasses root requirement' || fail 'test mode bypasses root requirement'
 
 menu_output=$(printf '9\n' | main)

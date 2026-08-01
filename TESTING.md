@@ -138,6 +138,8 @@ tests/simulate_root_backup_permissions.sh
 
 ## Noch offen
 
+- Reeller unveränderter Debian-13-VM-Lauf zur Bestätigung des Build-Skips nach der Versionsparserkorrektur (`1.10.1@26.05.1` → `26.05.1`). Die Parser- und Buildentscheidungsfälle sind automatisiert simuliert.
+
 - Echter Debian-12-VM-Test.
 - Echter Raspberry-Pi-Test.
 - Echter ELENATA-Test nach Neustart.
