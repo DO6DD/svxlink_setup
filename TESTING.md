@@ -21,7 +21,17 @@
 - `DEFAULT_LANG` bleibt `en_US`, solange `sounds/de_DE` fehlt.
 - `--check` nach der Installation vollständig erfolgreich.
 - `lsof` zeigt keine offene gelöschte SvxLink-Logdatei.
-- Der normale Updatepfad erkannte Rufzeichen `DM0DOS` und Profil 0 korrekt, behielt die Konfiguration und installierte SvxLink 26.05.1. Der anschließende Sounddownload scheiterte vor dieser Korrektur an fehlendem `curl`; der erneute VM-Test steht aus.
+- Der normale Updatepfad erkannte Rufzeichen `DM0DOS` und Profil 0 korrekt und behielt die Konfiguration.
+
+#### Reproduzierter unveränderter Update-Skip
+
+Voraussetzungen: Debian-13-VM, bereits installiertes SvxLink `26.05.1`, gültiger Buildstatus unter `/var/lib/svxlink-setup/build-state`, unveränderter SvxLink-Quellcommit, vorhandene nicht leere `de_DE`- und `en_US`-Soundpakete sowie Profil 0.
+
+1. `sudo ./svxlink_setup.sh` starten.
+2. Im Hauptmenü Punkt 1 und im Installationsmenü erneut Punkt 1 wählen.
+3. Update bestätigen und die Ausgabe prüfen.
+
+Erwartet und real bestätigt: unveränderter Quellstand und Releaseversion `26.05.1`; akzeptierter Buildstatus; kein CMake, kein Build und kein `make install`; vorhandenes `de_DE` und `en_US` ohne Neuinstallation, Download oder Entpacken; Deutsch für `SimplexLogic` und `RepeaterLogic`; kein automatischer Dienststart sowie Rückkehr zum Hauptmenü. Die Abschlussmeldung benennt dabei ausdrücklich den Build-Skip.
 
 ### Gefundene und behobene Fehler
 
@@ -46,11 +56,11 @@
 - Prüft das eingebettete Anna-16k-Archiv auf feste SHA-256 und Archivwurzel `de_DE-anna-16k/`.
 - Installiert deutsche und englische Testarchive ausschließlich in temporäre Testpfade; kein Root und keine Netzwerkverbindung sind erforderlich.
 - Prüft falsche Prüfsumme, Traversal, absolute Archivpfade und unsichere symbolische Links als kontrollierte Fehler; sichere interne Links des Anna-Archivs werden materialisiert.
-- Prüft Erhalt vorhandener deutscher Dateien, idempotente Installation, Sicherung der SvxLink-Konfiguration und sektionsgenaue Sprachumschaltung für `SimplexLogic` und `RepeaterLogic`.
+- Prüft idempotente Soundprüfung, fehlende oder leere deutsche Verzeichnisse, Sicherung der SvxLink-Konfiguration und sektionsgenaue Sprachumschaltung für `SimplexLogic` und `RepeaterLogic`.
 - Prüft, dass ein fehlendes `de_DE` die Konfiguration nicht ändert und dass andere Sektionen unverändert bleiben.
 - Prüft keine Vollständigkeit, Audioheader oder Modulabdeckung deutscher Sounds, entsprechend der vorgesehenen Aktivierungslogik.
 - Die feste englische Quelle ist Release `25.05` von `sm0svx/svxlink-sounds-en_US-heather`, Archiv `svxlink-sounds-en_US-heather-16k-25.05.tar.bz2`, SHA-256 `e79e61bec17a24fad093edfb21e7f8ca51af33b9590db954b4789271db2957dd` und Archivwurzel `en_US-heather-16k/`.
-- Prüft kontrollierte Fehler bei fehlendem `curl`, `tar` und `bzip2`, ohne einen rohen `command not found`-Fehler zu erzeugen.
+- Prüft kontrollierte Fehler bei fehlendem `curl`, `tar` und `bzip2`, ohne einen rohen `command not found`-Fehler zu erzeugen, sowie dass vorhandenes `en_US` weder curl noch erneutes Entpacken auslöst.
 
 ### `tests/simulate_root_backup_permissions.sh`
 
@@ -69,7 +79,7 @@
 
 - Prüft fehlenden Buildstatus, passenden Buildstatus, geänderten Git-Commit, geänderte Buildoptionen und Force-Modus.
 - Prüft atomar geschriebenen Buildstatus mit Modus `0644` sowie zeilenweises Einlesen ohne `source`-Ausführung.
-- Der reale Debian-13-VM-Test der Build-Skip-Logik steht noch aus.
+- Prüft kombinierte Versionskennung, normalisierten Vergleich und dass beim passenden Status keine Build-Kommandos aufgerufen werden; der entsprechende Debian-13-VM-Lauf ist real bestätigt.
 
 ### `tests/simulate_legacy_profiles.sh`
 
@@ -137,8 +147,6 @@ tests/simulate_root_backup_permissions.sh
 ```
 
 ## Noch offen
-
-- Der unveränderte Debian-13-VM-Lauf bestätigte den Build-Skip nach der Versionsparserkorrektur (`1.10.1@26.05.1` → `26.05.1`); Sound- und Sprachprüfung liefen dabei weiter. Vorhandene nicht leere WAV-Bestände verhindern Download und erneutes Entpacken.
 
 - Echter Debian-12-VM-Test.
 - Echter Raspberry-Pi-Test.

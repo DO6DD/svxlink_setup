@@ -1,8 +1,8 @@
 # Status
 
 - Aktueller Branch: `project-documentation`
-- Aktueller Stand: Debian-13-VM-Basistest bestanden.
-- Letzter bekannter getesteter Commit: `17fd665`
+- Aktueller Stand: realer Debian-13-VM-Update-Skip einschließlich Sound- und Sprachprüfung bestätigt.
+- Letzter real bestätigter Stand: `cb555b8`
 
 ## Fertig
 
@@ -18,9 +18,12 @@
 - Die historischen Profile 1 (ICS Pi-Repeater), 2 (uSvxCard) und 3 (WM8960 Audio-HAT) sind wieder im Installer auswählbar. `tests/simulate_legacy_profiles.sh` prüft ihre Konfigurationspfade ohne Root und ohne Downloads.
 - Der Produktivstart verlangt Root über `sudo ./svxlink_setup.sh`; `SVXLINK_TEST_MODE=true` bleibt ohne Root nutzbar.
 - Die Rechteverwaltung für deutsche und englische Sounds normalisiert ausschließlich `de_DE` beziehungsweise `en_US` auf `svxlink:svxlink`, Verzeichnisse `0755` und reguläre Dateien `0644`.
-- Der reale Debian-13-VM-Updatepfad erkannte Rufzeichen und Profil 0 korrekt und baute SvxLink 26.05.1 erneut. Er brach danach wegen der fehlenden `curl`-Abhängigkeit ab; ein Wiederholungstest nach der Korrektur steht aus.
-- Der reale unveränderte Debian-13-VM-Update-Lauf bestätigte den Build-Skip: Releaseversion `26.05.1`, Commit und Buildstatus wurden akzeptiert; CMake, Build und Installation wurden übersprungen. Profil-, Sound- und Sprachprüfung liefen weiter.
-- Die Versionserkennung verarbeitet `1.10.1@26.05.1` gezielt als Releaseversion `26.05.1`.
+- Real auf Debian 13 bestätigt: Update mit Rufzeichen `DM0DOS`, SvxLink `26.05.1`, gültigem persistenten Buildstatus, unverändertem Git-Commit und Profil 0.
+- Der Versionsparser verarbeitet `1.10.1@26.05.1` als Releaseversion `26.05.1`; Buildstatus und Quellstand wurden akzeptiert.
+- Der unveränderte Update-Lauf übersprang CMake, Kompilierung und Installation. Profil-, Sound- und Sprachprüfung liefen weiter.
+- `de_DE` und `en_US` wurden als vorhanden erkannt; es erfolgten weder Neuinstallation noch en_US-Download oder erneutes Entpacken. Rechte und Besitzerprüfung blieb idempotent.
+- Deutsch blieb für `SimplexLogic` und `RepeaterLogic` aktiv; SvxLink wurde nicht automatisch gestartet.
+- Die deutschen Abschlussmeldungen für Build-Skip und Profil 0 sowie die Rückkehr zum Hauptmenü wurden real bestätigt.
 
 ## Offen
 
@@ -28,14 +31,13 @@
 - Raspberry Pi mit ELENATA-Profil 4 einschließlich Audio, GPIO und produktivem Dienststart.
 - Aktuelle Raspberry-Pi-OS- und Debian-13-Hardwaretests für ICS Pi-Repeater, uSvxCard und WM8960 Audio-HAT.
 - Echtes Installations- und Hörtest-Ergebnis für die eingebetteten deutschen und offiziellen englischen Sounds.
-- Erneuter Debian-13-VM-Update- und Soundtest nach Aufnahme von `curl`, `tar` und `bzip2` in die Grundabhängigkeiten.
 - Externe deutsche RepeaterLogic.
 
 ## Grenzen der Profil-4-Simulation
 
 - Der Test ist kein vollständiger Installationslauf.
 - Nicht aufgerufene Mocks im aktuellen Komponententest: `aplay`, `arecord`, `systemctl`, `usermod` und `getent`.
-- Nicht hardwarevalidiert: echter Raspberry Pi, ELENATA Wolfson / Fe-Pi Audio, `dtoverlay=fe-pi-audio` auf echter Hardware, reale ALSA-Karte `Audio`, reale Mixercontrols, Aufnahme und Wiedergabe, GPIO PTT und Squelch, zweiter physischer Anschluss, produktiver Dienststart, deutsche Sounds und externe deutsche RepeaterLogic.
+- Nicht hardwarevalidiert: echter Raspberry Pi, ICS Pi-Repeater, uSvxCard, WM8960 Audio-HAT, ELENATA Wolfson / Fe-Pi Audio, Raspberry-Pi-Bootkonfiguration, reale Treiberinstallation der Profile 1–4, ALSA-Karte `Audio`, Mixercontrols, Aufnahme und Wiedergabe, GPIO PTT und Squelch, zweiter physischer Anschluss und produktiver Dienststart.
 
 ## Nächster Schritt
 

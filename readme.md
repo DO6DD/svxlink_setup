@@ -12,7 +12,7 @@ The SvxLink Server is a general purpose voice services system which, when connec
 
 Run `sudo ./svxlink_setup.sh` without parameters to open the interactive menu. It provides installation or update, read-only status, backup management, language installation and activation, and a safe configuration summary. The same actions are available through `--help`; non-interactive write actions require `--yes`.
 
-The production program requires root privileges and stops before changing the system when started without root. `sudo ./svxlink_setup.sh` preserves the invoking user from `SUDO_USER` for source and build directories; a direct root login deliberately uses `/root`. The isolated test mode does not require root.
+Read-only status, help and configuration display work without root; write actions require root and stop before changing the system when started without it. `sudo ./svxlink_setup.sh` preserves the invoking user from `SUDO_USER` for source and build directories; a direct root login deliberately uses `/root`. The isolated test mode does not require root.
 
 Before a build, the installer installs and verifies required tools including `curl`, `tar`, `bzip2`, checksum, Git and build tools. Status output uses textual status labels; ANSI colors are used only on a terminal and are disabled by `NO_COLOR` and redirected output.
 
@@ -135,7 +135,7 @@ Die read-only Aufrufe `./svxlink_setup.sh --help`, `--check` und `--show-config`
 
 Beim Update wird die SvxLink-Releaseversion normalisiert verglichen. Die in manchen Binärdateien sichtbare interne Kennung `1.10.1` ist nicht die Releaseversion: Aus `1.10.1@26.05.1` wird gezielt `26.05.1` ermittelt. Ist die Releaseversion nicht eindeutig feststellbar, wird aus Sicherheitsgründen neu gebaut.
 
-Ein unveränderter Update-Lauf wurde auf Debian 13 erfolgreich geprüft: CMake, Build und Installation werden übersprungen, während Profil-, Sound- und Sprachprüfungen weiterlaufen. Vor jedem Sounddownload prüft das Skript den vorhandenen Bestand anhand nicht leerer WAV-Dateien. Vollständige deutsche und englische Pakete bleiben erhalten und werden nicht erneut geladen oder entpackt; sichtbare Abschlussmeldungen unterscheiden Build, Skip und Soundfehler.
+Normale Updates bauen nur bei geändertem oder ungültigem Stand; unveränderte Installationen werden schnell geprüft. Ein solcher Build-Skip wurde auf Debian 13 real bestätigt: CMake, Build und Installation werden übersprungen, während Profil-, Sound- und Sprachprüfungen weiterlaufen. Vollständige deutsche und englische Soundpakete werden nicht erneut installiert oder heruntergeladen. Profil 0 ist für Nicht-Raspberry-Pi-Systeme vorgesehen; die Profile 1–4 sind Raspberry-Pi-spezifisch.
 
 Für die Sprachordner `de_DE` und `en_US` werden jeweils nur der gewählte Ordner und dessen reguläre Dateien berechtigt: `svxlink:svxlink`, Verzeichnisse `0755`, reguläre Dateien `0644`. Andere Sprachen und Ziele symbolischer Links bleiben unverändert.
 

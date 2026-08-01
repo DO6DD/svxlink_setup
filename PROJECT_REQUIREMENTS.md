@@ -42,12 +42,14 @@
 - Für den Build-Skip wird ausschließlich eine normalisierte SvxLink-Releaseversion verglichen. Die interne Kennung `1.10.1` ist keine Releaseversion; aus `1.10.1@26.05.1` wird gezielt `26.05.1` ermittelt. Nicht eindeutige Erkennung bedeutet sicherer Neuaufbau.
 - Der unveränderte Build-Skip ist real auf Debian 13 bestätigt; CMake, Kompilierung und Installation werden dabei nicht aufgerufen, während Profil-, Sound- und Sprachprüfungen weiterlaufen.
 - Vollständige Soundpakete werden anhand nicht leerer regulärer WAV-Dateien vor jedem Download geprüft und weder heruntergeladen noch entpackt. Abschlussmeldungen unterscheiden tatsächlichen Build, Skip und Sound-Teilfehler; sichtbare Benutzertexte sind deutsch.
+- Vorhandenes `en_US` verhindert curl und Entpacken; vorhandenes `de_DE` verhindert eine Neuinstallation. Die Soundprüfung einschließlich Rechte und Besitzer ist idempotent und läuft auch beim Build-Skip.
 - Für Quellcode und Build-Verzeichnisse wird `SUDO_USER` mit dem über `getent` ermittelten Home-Verzeichnis verwendet. Ein direkter Root-Login verwendet ausdrücklich `/root`.
 - Der Prüfmodus `--check` meldet System-, Dienst-, Log-, Audio- und Update-Status. Hardwareergebnisse bleiben bis zum echten Test nicht hardwarevalidiert.
 - Nicht-Raspberry-Pi-Systeme erhalten automatisch Profil 0; Profil 0 erzeugt keine produktive Audio-, PTT- oder Squelch-Konfiguration.
 - RepeaterLogic ist die aktive Basislogik.
 - Ohne fertig konfigurierte Hardware wird der Dienst nicht automatisch produktiv gestartet.
 - Das interaktive Hauptmenü strukturiert Installation, Status, Backups, Sprachverwaltung und Konfigurationsanzeige, ohne die vorhandenen Profilpfade zu ersetzen.
+- Nach einer abgeschlossenen interaktiven Aktion kehrt das Skript zum Hauptmenü zurück. Profil 0 ist für Nicht-Raspberry-Pi-Systeme vorgesehen und verändert keine Raspberry-Pi-Hardwarekonfiguration.
 - Ein erzwungener Neuaufbau sichert Konfiguration, lokale Events, systemd-Overrides und Sounds vor dem Neuaufbau; lokale Anpassungen werden nicht ungefragt gelöscht.
 
 ## Testbarkeit und Hardwareprofile

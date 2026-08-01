@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Realen Debian-13-Update-Skip nach Parser- und Soundkorrektur bestätigt: unveränderter Buildstatus überspringt CMake, Build und Installation; vorhandenes `en_US` verhindert erneut curl, vorhandenes `de_DE` eine Neuinstallation. Deutsche Abschlussmeldungen und die Rückkehr zum Hauptmenü wurden ebenfalls bestätigt.
+
 - Vorhandene vollständige deutsche und englische Soundpakete werden vor Archivprüfung oder Download erkannt, ausschließlich idempotent berechtigt und nicht erneut entpackt. Sichtbare Abschluss- und Soundmeldungen sind deutsch und unterscheiden Build, Skip und Sound-Teilfehler.
 
 - Korrigierte SvxLink-Releaseerkennung: Die interne Komponentenkennung `1.10.1` wird nicht mehr als Release mit `26.05.1` verwechselt. Bei `1.10.1@26.05.1` wird gezielt `26.05.1` verwendet; nicht eindeutige Werte erzwingen sicher einen Neuaufbau.
