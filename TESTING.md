@@ -1,37 +1,56 @@
-# Testplan
+# Teststand
 
-## VM-validiert
+## Erfolgreich validiert
 
-- Test auf Debian 12 VM.
-- Test auf Debian 13 VM.
-- Prüfung der Paketinstallation.
-- Prüfung des SvxLink-Builds.
-- Prüfung des Benutzers und der Gruppe `svxlink`.
-- Prüfung des systemd-Dienstes.
-- Prüfung der Logdatei `/var/log/svxlink`.
-- Prüfung von Logrotate mit `copytruncate`.
-- Prüfung mit `lsof +L1` auf offene gelöschte Dateien.
-- Prüfung deaktivierter automatischer Updates.
-- Zweiter Installationslauf zur Kontrolle der Wiederholbarkeit.
-- Simulierter ELENATA-Test mit Testdateien für Bootkonfiguration.
+### Debian 13 VM
 
-## Hardwarevalidiert
+- `--check` läuft vor der Installation sauber und verändert nichts.
+- Ein frischer Vorinstallationszustand wird mit `MISSING` und `SKIP` ohne rohe stderr-Fehler gemeldet.
+- Paketinstallation erfolgreich.
+- SvxLink 26.05.1 aus dem offiziellen Repository erfolgreich gebaut und nach `/usr` installiert.
+- Benutzer und Gruppe `svxlink` angelegt; die Gruppen `audio`, `dialout` und `plugdev` sind korrekt gesetzt.
+- Automatische APT-Updates deaktiviert; `apt-daily.timer` und `apt-daily-upgrade.timer` sind maskiert.
+- `/etc/apt/apt.conf.d/20svxlink-disable-auto-updates` korrekt geschrieben.
+- `/var/log/svxlink` angelegt.
+- Logrotate verwendet täglich `rotate 14`, `compress`, `delaycompress`, `missingok`, `notifempty`, `copytruncate` und `su svxlink svxlink`.
+- systemd-Service installiert und aktiviert.
+- Der Dienst bleibt bei Profil 0 ohne Hardware bewusst inactive.
+- Zweiter Installationslauf erfolgreich und idempotent.
+- Aktive Logik ist `RepeaterLogic`.
+- `CALLSIGN` wurde in `RepeaterLogic` und `SimplexLogic` korrekt gesetzt.
+- `DEFAULT_LANG` bleibt `en_US`, solange `sounds/de_DE` fehlt.
+- `--check` nach der Installation vollständig erfolgreich.
+- `lsof` zeigt keine offene gelöschte SvxLink-Logdatei.
 
-- Späterer echter Raspberry-Pi-Test.
-- Echter ELENATA-Test für Audioaufnahme, Audiowiedergabe, PTT und Squelch.
+### Gefundene und behobene Fehler
 
-Hardwarefunktionen gelten erst nach erfolgreichem Test auf der jeweiligen Zielhardware als hardwarevalidiert.
+- Rohe `runuser`-, `id`-, `grep`- und `logrotate`-Fehler im Prüfmodus unterdrückt.
+- Abbruch durch `false && usermod` auf Nicht-Raspberry-Pi-Systemen behoben.
+- Kommentarlos übersprungenes Hardwareprofil auf Nicht-Pi-Systemen durch explizites Profil 0 ersetzt.
+- Ursprünglich aktive `SimplexLogic` durch `RepeaterLogic` als Basislogik ersetzt.
+- Rufzeichen nicht mehr nur in `SimplexLogic` gesetzt.
+- Ungefilterte Logrotate-Debugausgabe unterdrückt.
 
-## Modernisierungsstand
+## Simuliert validiert
 
-- `bash -n svxlink_setup.sh` und ShellCheck vor jeder Ausführung prüfen.
-- `sudo ./svxlink_setup.sh --check` auf Debian 12 und Debian 13 ausführen.
-- Auf Raspberry Pi die Erkennung von `/boot/config.txt` und `/boot/firmware/config.txt` getrennt prüfen.
-- Den ELENATA-Test erst nach Neustart mit vorhandener ALSA-Karte `Audio` durchführen.
-- Prüfen, dass die Bootkonfiguration keine doppelten Einträge enthält und vorhandene UART-Einstellungen unverändert bleiben.
-- Prüfen, dass ein zweiter Installationslauf keine doppelten Konfigurations- oder Logrotate-Einträge erzeugt.
-- Späterer Logic-Test in einer VM.
-- SvxLink-Start mit externer deutscher Logic prüfen.
-- Auf Tcl-Fehler, Kennung, Uhrzeit, Rogerbeep und Sprachdateien prüfen.
-- Update-Test ohne Überschreiben einer angepassten `repeater.conf`.
-- Prüfen, dass ein vollständiger deutscher Sprachsatz unter `sounds/de_DE` lesbar ist und keine unvollständige Installation als Erfolg gilt.
+- Idempotente ELENATA-Bootkonfiguration.
+- Erhalt fremder und kommentierter Bootzeilen.
+- Rx-/Tx-Sektionsbearbeitung ohne doppelte oder falsch zugeordnete SQL-/PTT-Werte.
+- Account-Setup für Raspberry Pi und Nicht-Raspberry-Pi.
+- Nicht-Pi-Profil 0.
+
+## Noch offen
+
+- Echter Debian-12-VM-Test.
+- Echter Raspberry-Pi-Test.
+- Echter ELENATA-Test nach Neustart.
+- ALSA-Karte `Audio`.
+- Aufnahme und Wiedergabe als Benutzer `svxlink`.
+- Mixerwerte.
+- GPIO PTT und Squelch.
+- Zweiter Anschluss.
+- Produktiver Dienststart.
+- Deutsche Sounds.
+- Externe deutsche RepeaterLogic.
+
+Hardwarefunktionen gelten bis zum erfolgreichen Test auf der jeweiligen Zielhardware als nicht hardwarevalidiert.

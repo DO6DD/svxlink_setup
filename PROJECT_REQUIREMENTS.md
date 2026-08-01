@@ -38,6 +38,9 @@
 - ELENATA Wolfson / Fe-Pi Audio ist das einzige angebotene Raspberry-Pi-Hardwareprofil; TL5 wird nicht unterstützt.
 - Das Script benötigt `sudo`, erkennt das aufrufende Benutzerkonto über `SUDO_USER` und legt SvxLink-Quellen nicht unter `/root` ab.
 - Der Prüfmodus `--check` meldet System-, Dienst-, Log-, Audio- und Update-Status. Hardwareergebnisse bleiben bis zum echten Test nicht hardwarevalidiert.
+- Nicht-Raspberry-Pi-Systeme erhalten automatisch Profil 0; Profil 0 erzeugt keine produktive Audio-, PTT- oder Squelch-Konfiguration.
+- RepeaterLogic ist die aktive Basislogik.
+- Ohne fertig konfigurierte Hardware wird der Dienst nicht automatisch produktiv gestartet.
 
 ## Deutsche Sounds und RepeaterLogic
 
