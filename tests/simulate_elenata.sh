@@ -5,6 +5,8 @@ set -Eeuo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 readonly ROOT
+# shellcheck disable=SC1091
+source "${ROOT}/tests/test_output.sh"
 TEMP_DIR=$(mktemp -d)
 readonly TEMP_DIR
 readonly MOCK_LOG="${TEMP_DIR}/mock.log"
@@ -19,11 +21,12 @@ export SVXLINK_BACKUP_DIR="${TEMP_DIR}/backups"
 audio_present=true
 missing_control=""
 failures=0
+successes=0
 
 cleanup() { rm -rf "${TEMP_DIR}"; }
 trap cleanup EXIT
-fail() { printf 'FAIL: %s\n' "$*" >&2; failures=$((failures + 1)); }
-pass() { printf 'PASS: %s\n' "$*"; }
+fail() { test_line '[FEHLER]' "$*" >&2; failures=$((failures + 1)); }
+pass() { test_line '[ OK ]' "$*"; successes=$((successes + 1)); }
 expect() { [[ $1 == "$2" ]] && pass "$3" || fail "$3 (expected $2, got $1)"; }
 line() { grep -Fqx "$2" "$1" && pass "$3" || fail "$3"; }
 section_value() { expect "$(ini_value "${SVXLINK_CONFIG}" "$1" "$2")" "$3" "$1/$2"; }
@@ -96,6 +99,7 @@ logrotate() { mock_command logrotate "$@"; }
 # shellcheck disable=SC1091
 source "${ROOT}/svxlink_setup.sh"
 trap - ERR
+test_line '[TEST]' 'ELENATA-Profil-4-Komponentensimulation'
 audio_card_number() { ${audio_present} && printf '2\n'; }
 snapshot before
 
@@ -213,4 +217,5 @@ for command in amixer asactl aplay arecord systemctl usermod getent chown chmod 
     fi
 done
 
-if (( failures == 0 )); then printf 'Simulation completed: all tests passed.\n'; else printf 'Simulation completed: %d failures.\n' "${failures}" >&2; exit 1; fi
+printf '\n============================================================\nTESTERGEBNIS\n============================================================\nErfolgreich: %d\nWarnungen:   0\nFehler:      %d\n' "${successes}" "${failures}"
+if (( failures == 0 )); then printf 'Ergebnis:    ERFOLGREICH\n============================================================\n'; else printf 'Ergebnis:    FEHLGESCHLAGEN\n============================================================\n' >&2; exit 1; fi

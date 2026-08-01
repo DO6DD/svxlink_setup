@@ -37,3 +37,6 @@
 - Verzeichnisbackups kopieren statt den Quellordner zu verschieben; ein separater Helfer bleibt für atomaren Austausch zuständig.
 - Deutsche und englische Soundordner werden einzeln auf `svxlink:svxlink`, Verzeichnisse `0755` und reguläre Dateien `0644` normalisiert. Symbolziele werden nicht dereferenziert.
 - Parameterloser Programmstart öffnet verbindlich `main_menu`; Systemerkennung und Installation sind erst über Installations-Untermenüpunkt 1 erreichbar.
+- `curl`, `tar`, `bzip2` und `gcc` als zentrale Grundabhängigkeiten ergänzt; erforderliche Werkzeuge werden vor Build und Archivverarbeitung kontrolliert geprüft.
+- Englischer Soundfehler meldet jetzt, dass SvxLink bereits aktualisiert sein kann und ein erneuter Update-Lauf erforderlich ist.
+- Headerrahmen, Statuszeilen und Simulationsergebnisse vereinheitlicht; Farben sind terminalgebunden und `NO_COLOR`- beziehungsweise Umleitungsausgaben bleiben ANSI-frei.

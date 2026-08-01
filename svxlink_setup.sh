@@ -85,29 +85,72 @@ ACTION_YES=false
 CALLSIGN_PROVIDED=false
 HARDWARE_PROFILE_PROVIDED=false
 
-show_header() {
-    cat <<'EOF'
-+---------------------------------------------------------------+
-|                         SVXLINK SETUP                          |
-| Debian / Raspberry Pi OS                                      |
-|                                                               |
-| Basierend auf svxlink_setup von DF5KX & DO6NP                |
-| Weiterentwickelt und angepasst von DO6DD                     |
-+---------------------------------------------------------------+
-Dieses Programm muss als root gestartet werden.
+output_uses_color() {
+    [[ -t 1 && ${TERM:-dumb} != dumb && -z ${NO_COLOR:-} ]]
+}
 
-Aufruf:
-  sudo ./svxlink_setup.sh
-EOF
+print_colored() {
+    local color=$1 label=$2 message=$3 prefix='' reset=''
+    if output_uses_color; then
+        case ${color} in
+            green) prefix='\033[32m' ;;
+            yellow) prefix='\033[33m' ;;
+            red) prefix='\033[31m' ;;
+            cyan) prefix='\033[36m' ;;
+        esac
+        reset='\033[0m'
+    fi
+    printf '%b[%s]%b %s\n' "${prefix}" "${label}" "${reset}" "${message}"
+}
+
+print_info() { print_colored cyan 'INFO' "$*"; }
+print_success() { print_colored green ' OK ' "$*"; }
+print_warning() { print_colored yellow 'WARN' "$*"; }
+print_error() { print_colored red 'FEHLER' "$*" >&2; }
+print_skip() { print_colored '' '  - ' "$*"; }
+print_section() { printf '\n============================================================\n%s\n============================================================\n' "$*"; }
+
+show_header() {
+    local width=63 text='SVXLINK SETUP' padding_left padding_right
+    padding_left=$(( (width - ${#text}) / 2 ))
+    padding_right=$(( width - ${#text} - padding_left ))
+    printf '+%*s+\n' "${width}" '' | tr ' ' '-'
+    printf '|%*s%s%*s|\n' "${padding_left}" '' "${text}" "${padding_right}" ''
+    printf '|%-*s|\n' "${width}" 'Debian / Raspberry Pi OS'
+    printf '|%-*s|\n' "${width}" ''
+    printf '|%-*s|\n' "${width}" 'Basierend auf svxlink_setup von DF5KX & DO6NP'
+    printf '|%-*s|\n' "${width}" 'Weiterentwickelt und angepasst von DO6DD'
+    printf '+%*s+\n' "${width}" '' | tr ' ' '-'
+    printf '\nDieses Programm muss als Root gestartet werden.\n\nAufruf:\n  sudo ./svxlink_setup.sh\n'
 }
 
 log() {
-    printf '%s: %s\n' "${SCRIPT_NAME}" "$*"
+    print_info "${SCRIPT_NAME}: $*"
 }
 
 die() {
-    log "ERROR: $*"
+    print_error "$*"
     exit 1
+}
+
+require_command() {
+    local program=$1
+    if [[ ${SVXLINK_TEST_MODE:-false} == true && ",${SVXLINK_TEST_MISSING_COMMANDS:-}," == *",${program},"* ]]; then
+        print_error "Erforderliches Programm fehlt: ${program}. Bitte prüfe die Paketinstallation."
+        return 1
+    fi
+    if ! command -v "${program}" >/dev/null 2>&1; then
+        print_error "Erforderliches Programm fehlt: ${program}. Bitte prüfe die Paketinstallation."
+        return 1
+    fi
+    return 0
+}
+
+require_base_tools() {
+    local program
+    for program in curl tar bzip2 sha256sum git cmake make g++; do
+        require_command "${program}" || return 1
+    done
 }
 
 on_error() {
@@ -387,6 +430,9 @@ normalize_sound_permissions() {
 install_sound_archive() (
     local archive=$1 expected_sha=$2 expected_root=$3 language=$4 replace_existing=${5:-false}
     local actual_sha temporary staged target
+    require_command tar || return 1
+    require_command bzip2 || return 1
+    require_command sha256sum || return 1
     target="${SVXLINK_SOUNDS_DIR}/${language}"
     [[ -f ${archive} ]] || { log "Sound archive is missing: ${archive}"; return 1; }
     actual_sha=$(sha256sum "${archive}" | awk '{print $1}')
@@ -440,6 +486,7 @@ install_german_sounds() {
 install_english_sounds() (
     local replace_existing=${1:-false}
     local temporary archive expected_sha=${ENGLISH_SOUND_SHA256}
+    require_command curl || return 1
     if [[ ${SVXLINK_TEST_MODE:-false} == true ]]; then
         expected_sha=${ENGLISH_SOUND_SHA256_OVERRIDE:-${ENGLISH_SOUND_SHA256}}
     fi
@@ -492,6 +539,11 @@ detect_operating_system() {
     if [[ ${SVXLINK_TEST_MODE:-false} == true && ${SVXLINK_TEST_RASPBERRY_PI:-false} == true ]]; then
         IS_RASPBERRY_PI=true
         BOOT_CONFIG=${BOOT_CONFIG_FILE:?BOOT_CONFIG_FILE is required in test mode}
+        return 0
+    fi
+    if [[ ${SVXLINK_TEST_MODE:-false} == true && -n ${SVXLINK_TEST_OS_VERSION:-} ]]; then
+        OS_VERSION=${SVXLINK_TEST_OS_VERSION}
+        IS_RASPBERRY_PI=false
         return 0
     fi
     [[ -r /etc/os-release ]] || die "Missing /etc/os-release."
@@ -547,11 +599,11 @@ EOF
 
 install_packages() {
     local -a packages=(
-        ca-certificates cmake g++ git libasound2-dev libcurl4-openssl-dev
+        bzip2 ca-certificates cmake curl g++ gcc git libasound2-dev libcurl4-openssl-dev
         libgcrypt-dev libgpiod-dev libgsm1-dev libjsoncpp-dev libogg-dev
         libopus-dev libopusenc-dev libpopt-dev libsigc++-2.0-dev libsndfile1-dev
         libspeex-dev libspeexdsp-dev libssl-dev libvorbis-dev logrotate make
-        tcl-dev alsa-utils lsof
+        tcl-dev alsa-utils lsof tar
     )
 
     if ${IS_RASPBERRY_PI}; then
@@ -1025,9 +1077,9 @@ check_item() {
     local label=$1
     shift
     if "$@"; then
-        log "OK: ${label}"
+        print_success "${label}"
     else
-        log "MISSING: ${label}"
+        print_error "${label}"
     fi
 }
 
@@ -1075,70 +1127,93 @@ check_svxlink_audio_access() {
 }
 
 run_checks() {
+    local callsign profile service_active
     require_root
     detect_operating_system
-    log "Operating system: Debian/Raspberry Pi OS ${OS_VERSION}"
-    log "Raspberry Pi detected: ${IS_RASPBERRY_PI}"
+    print_section 'SYSTEMSTAND'
+    printf 'System\n'
+    print_success "Betriebssystem: Debian/Raspberry Pi OS ${OS_VERSION}"
+    if ${IS_RASPBERRY_PI}; then print_info 'Raspberry Pi: ja'; else print_info 'Raspberry Pi: nein'; fi
+    print_info "Architektur: $(uname -m)"
     if ${IS_RASPBERRY_PI}; then
-        log "Boot configuration: ${BOOT_CONFIG}"
+        print_info "Bootkonfiguration: ${BOOT_CONFIG}"
         check_item "Fe-Pi Audio boot overlay" grep -Fqx "dtoverlay=fe-pi-audio" "${BOOT_CONFIG}"
     fi
     if ! ${IS_RASPBERRY_PI}; then
-        log "SKIP: ELENATA ALSA card check (not a Raspberry Pi)"
+        print_skip 'ELENATA ALSA-Karte nicht zutreffend (kein Raspberry Pi)'
     elif elenata_profile_configured; then
         check_item "ELENATA ALSA card Audio" audio_card_available
     else
-        log "INFO: ALSA card Audio not present; ELENATA profile not configured"
+        print_info 'ALSA-Karte Audio nicht vorhanden; ELENATA-Profil nicht konfiguriert'
     fi
+    printf '\nSvxLink\n'
     if check_svxlink_user; then
-        log "OK: SvxLink user"
+        print_success 'SvxLink-Benutzer'
         check_item "aplay as svxlink" check_svxlink_audio_access aplay
         check_item "arecord as svxlink" check_svxlink_audio_access arecord
     else
-        log "MISSING: SvxLink user"
-        log "SKIP: aplay as svxlink (user missing)"
-        log "SKIP: arecord as svxlink (user missing)"
+        print_error 'SvxLink-Benutzer'
+        print_skip 'aplay als svxlink (Benutzer fehlt)'
+        print_skip 'arecord als svxlink (Benutzer fehlt)'
     fi
     check_item "SvxLink binary" bash -c 'command -v svxlink >/dev/null 2>&1'
-    check_item "SvxLink service" systemctl is-enabled --quiet svxlink.service 2>/dev/null
+    check_item "systemd-Service aktiviert" systemctl is-enabled --quiet svxlink.service 2>/dev/null
+    service_active=$(systemctl is-active svxlink.service 2>/dev/null || true)
+    if [[ ${service_active} == active ]]; then
+        print_success 'systemd-Service aktiv'
+    else
+        print_skip 'systemd-Service nicht gestartet'
+    fi
+    callsign=$(ini_value "${SVXLINK_CONFIG}" RepeaterLogic CALLSIGN 2>/dev/null || true)
+    if [[ -n ${callsign} ]]; then
+        print_success "Rufzeichen: ${callsign}"
+    else
+        print_error 'Rufzeichen nicht konfiguriert'
+    fi
+    profile=$(detected_hardware_profile)
+    print_info "Hardwareprofil: ${profile} – $(hardware_profile_name "${profile}")"
+    printf '\nSprache\n'
+    check_sound_status
+    printf '\nBackup und Logs\n'
     check_item "SvxLink log file" test -f "${SVXLINK_LOG}"
     check_logrotate_configuration
     if [[ -f ${APT_CONFIG} ]]; then
         check_item "Automatic APT updates disabled" automatic_updates_disabled
     else
-        log "MISSING: Automatic APT updates disabled"
+        print_error 'Automatische APT-Updates deaktiviert'
     fi
-    log "Free space: $(df -h / | awk 'NR == 2 {print $4}')"
+    print_info "Freier Speicher: $(df -h / | awk 'NR == 2 {print $4}')"
     if command -v lsof >/dev/null 2>&1; then
         if lsof +L1 2>/dev/null | grep -Eq 'svxlink.*(/var/log/svxlink).*\(deleted\)'; then
-            log "MISSING: SvxLink has an open deleted log file."
+            print_error 'SvxLink hat eine offene gelöschte Logdatei'
         else
-            log "OK: No open deleted SvxLink log file found."
+            print_success 'Keine offene gelöschte SvxLink-Logdatei'
         fi
     else
-        log "MISSING: lsof is not installed."
+        print_error 'lsof ist nicht installiert'
     fi
-    check_sound_status
+    printf '\nGesamtergebnis\n'
+    print_warning 'Installation kann vorhanden sein; Hardwarevalidierung ist weiterhin ausstehend.'
 }
 
 check_sound_status() {
     local language simplex_language repeater_language
     for language in en_US de_DE; do
         if sound_directory_has_wav "${SVXLINK_SOUNDS_DIR}/${language}"; then
-            log "OK: ${language} sound directory ($(sound_wav_count "${SVXLINK_SOUNDS_DIR}/${language}") WAV files)"
+            print_success "${language} vorhanden: $(sound_wav_count "${SVXLINK_SOUNDS_DIR}/${language}") WAV-Dateien"
         else
-            log "MISSING: ${language} sound directory"
+            print_error "${language} Soundordner fehlt"
         fi
     done
     [[ -f ${SVXLINK_CONFIG} ]] || return 0
     simplex_language=$(ini_value "${SVXLINK_CONFIG}" "SimplexLogic" "DEFAULT_LANG" || true)
     repeater_language=$(ini_value "${SVXLINK_CONFIG}" "RepeaterLogic" "DEFAULT_LANG" || true)
-    log "SimplexLogic DEFAULT_LANG: ${simplex_language:-missing}"
-    log "RepeaterLogic DEFAULT_LANG: ${repeater_language:-missing}"
-    [[ ${simplex_language} == "${repeater_language}" ]] || log "WARN: SimplexLogic and RepeaterLogic use different languages."
+    print_info "SimplexLogic: ${simplex_language:-missing}"
+    print_info "RepeaterLogic: ${repeater_language:-missing}"
+    [[ ${simplex_language} == "${repeater_language}" ]] || print_warning 'SimplexLogic und RepeaterLogic verwenden unterschiedliche Sprachen.'
     for language in "${simplex_language}" "${repeater_language}"; do
         [[ -z ${language} ]] || sound_directory_has_wav "${SVXLINK_SOUNDS_DIR}/${language}" || \
-            log "WARN: Active language ${language} has no usable sound directory."
+            print_warning "Aktive Sprache ${language} hat keinen nutzbaren Soundordner."
     done
 }
 
@@ -1238,19 +1313,28 @@ run_installation() {
         return 0
     fi
     install_packages
+    require_base_tools || die "Grundabhängigkeiten fehlen; SvxLink-Build wurde nicht gestartet."
     disable_automatic_updates
     ensure_svxlink_account
     build_svxlink
     configure_logging
     configure_base_svxlink
-    install_english_sounds || die "English sound installation failed; the installation is incomplete."
+    configure_hardware_profile
     if install_german_sounds; then
         GERMAN_SOUNDS_AVAILABLE=true
-        activate_sound_language de_DE false || die "German sound installation succeeded but language activation failed."
     else
-        log "WARN: German sound installation failed. English remains active."
+        print_warning 'Die deutschen Sounds konnten nicht installiert werden. Englisch bleibt aktiv.'
     fi
-    configure_hardware_profile
+    if ! install_english_sounds; then
+        print_error 'SvxLink wurde aktualisiert.'
+        print_error 'Die englischen Sounds konnten nicht installiert werden.'
+        print_error 'Die Installation ist daher noch nicht vollständig abgeschlossen.'
+        print_error 'Bitte behebe den Fehler und starte den Updatevorgang erneut.'
+        return 1
+    fi
+    if ${GERMAN_SOUNDS_AVAILABLE}; then
+        activate_sound_language de_DE false || die "German sound installation succeeded but language activation failed."
+    fi
     if [[ ${HARDWARE_PROFILE} == 4 ]]; then
         log "ELENATA boot configuration was prepared. Reboot before putting the station into service."
     fi

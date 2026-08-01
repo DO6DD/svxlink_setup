@@ -5,6 +5,8 @@ set -Eeuo pipefail
 
 ROOT=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 readonly ROOT
+# shellcheck disable=SC1091
+source "${ROOT}/tests/test_output.sh"
 TEMP_DIR=$(mktemp -d)
 readonly TEMP_DIR
 export SVXLINK_TEST_MODE=true
@@ -13,10 +15,11 @@ export SVXLINK_SOUNDS_DIR="${TEMP_DIR}/sounds"
 export SVXLINK_BACKUP_DIR="${TEMP_DIR}/backups"
 
 failures=0
+successes=0
 cleanup() { rm -rf "${TEMP_DIR}"; }
 trap cleanup EXIT
-fail() { printf 'FAIL: %s\n' "$*" >&2; failures=$((failures + 1)); }
-pass() { printf 'PASS: %s\n' "$*"; }
+fail() { test_line '[FEHLER]' "$*" >&2; failures=$((failures + 1)); }
+pass() { test_line '[ OK ]' "$*"; successes=$((successes + 1)); }
 expect_file() { [[ -f $1 ]] && pass "$2" || fail "$2"; }
 expect_value() { [[ $1 == "$2" ]] && pass "$3" || fail "$3 (expected $2, got $1)"; }
 
@@ -74,6 +77,7 @@ assert_production_paths_unchanged() {
 # shellcheck disable=SC1091
 source "${ROOT}/svxlink_setup.sh"
 trap - ERR
+test_line '[TEST]' 'Soundverwaltungs-Simulation'
 
 require_root() { :; }
 snapshot_production_paths before
@@ -127,6 +131,18 @@ expect_file "${SVXLINK_SOUNDS_DIR}/en_US/Core/online.wav" 'English installation 
 expect_value "$(stat -c '%a' "${SVXLINK_SOUNDS_DIR}/en_US")" 755 'English sound directory permissions'
 expect_value "$(stat -c '%a' "${SVXLINK_SOUNDS_DIR}/en_US/Core/online.wav")" 644 'English sound file permissions'
 
+export SVXLINK_TEST_MISSING_COMMANDS=curl
+if install_english_sounds >"${TEMP_DIR}/missing-curl.out" 2>&1; then fail 'missing curl must fail cleanly'; else pass 'missing curl is rejected before download'; fi
+grep -Fq 'Erforderliches Programm fehlt: curl' "${TEMP_DIR}/missing-curl.out" && pass 'missing curl names dependency' || fail 'missing curl names dependency'
+grep -Fq 'curl: Kommando nicht gefunden' "${TEMP_DIR}/missing-curl.out" && fail 'missing curl has no raw shell error' || pass 'missing curl has no raw shell error'
+export SVXLINK_TEST_MISSING_COMMANDS=tar
+if install_german_sounds >"${TEMP_DIR}/missing-tar.out" 2>&1; then fail 'missing tar must fail cleanly'; else pass 'missing tar is rejected before archive handling'; fi
+grep -Fq 'Erforderliches Programm fehlt: tar' "${TEMP_DIR}/missing-tar.out" && pass 'missing tar names dependency' || fail 'missing tar names dependency'
+export SVXLINK_TEST_MISSING_COMMANDS=bzip2
+if install_german_sounds >"${TEMP_DIR}/missing-bzip2.out" 2>&1; then fail 'missing bzip2 must fail cleanly'; else pass 'missing bzip2 is rejected before archive handling'; fi
+grep -Fq 'Erforderliches Programm fehlt: bzip2' "${TEMP_DIR}/missing-bzip2.out" && pass 'missing bzip2 names dependency' || fail 'missing bzip2 names dependency'
+unset SVXLINK_TEST_MISSING_COMMANDS
+
 if activate_sound_language de_DE false >/dev/null 2>&1; then fail 'missing German language must not activate'; else pass 'missing German language leaves configuration unchanged'; fi
 expect_value "$(ini_value "${SVXLINK_CONFIG}" SimplexLogic DEFAULT_LANG)" en_US 'Simplex remains English when German missing'
 install_german_sounds
@@ -156,9 +172,10 @@ help_output=$(main --help)
 snapshot_production_paths after
 assert_production_paths_unchanged
 
+printf '\n============================================================\nTESTERGEBNIS\n============================================================\nErfolgreich: %d\nWarnungen:   0\nFehler:      %d\n' "${successes}" "${failures}"
 if (( failures == 0 )); then
-    printf 'Sound management simulation completed: all tests passed.\n'
+    printf 'Ergebnis:    ERFOLGREICH\n============================================================\n'
 else
-    printf 'Sound management simulation completed: %d failures.\n' "${failures}" >&2
+    printf 'Ergebnis:    FEHLGESCHLAGEN\n============================================================\n' >&2
     exit 1
 fi

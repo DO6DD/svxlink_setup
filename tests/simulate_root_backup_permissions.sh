@@ -5,6 +5,8 @@ set -Eeuo pipefail
 
 ROOT=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 readonly ROOT
+# shellcheck disable=SC1091
+source "${ROOT}/tests/test_output.sh"
 TEMP_DIR=$(mktemp -d)
 readonly TEMP_DIR
 export SVXLINK_TEST_MODE=true
@@ -13,15 +15,17 @@ export SVXLINK_SOUNDS_DIR="${TEMP_DIR}/sounds"
 export SVXLINK_BACKUP_DIR="${TEMP_DIR}/backups"
 
 failures=0
+successes=0
 cleanup() { rm -rf "${TEMP_DIR}"; }
 trap cleanup EXIT
-pass() { printf 'PASS: %s\n' "$*"; }
-fail() { printf 'FAIL: %s\n' "$*" >&2; failures=$((failures + 1)); }
+pass() { test_line '[ OK ]' "$*"; successes=$((successes + 1)); }
+fail() { test_line '[FEHLER]' "$*" >&2; failures=$((failures + 1)); }
 expect() { [[ $1 == "$2" ]] && pass "$3" || fail "$3 (expected ${2}, got ${1})"; }
 
 # shellcheck disable=SC1091
 source "${ROOT}/svxlink_setup.sh"
 trap - ERR
+test_line '[TEST]' 'Root-, Backup- und Soundrechte-Simulation'
 
 run_installation() { printf 'INSTALLATION_CALLED\n'; }
 install_packages() { printf 'PACKAGE_COMMAND_CALLED\n'; }
@@ -36,7 +40,12 @@ expect "$(grep -Fxc 'FEHLER: Root-Rechte erforderlich.' "${nonroot_output}" || t
 grep -Fqx '  sudo ./svxlink_setup.sh' "${nonroot_output}" && pass 'root error names sudo invocation' || fail 'root error names sudo invocation'
 
 header=$(show_header)
-[[ ${header} == *'Dieses Programm muss als root gestartet werden.'* && ${header} == *'sudo ./svxlink_setup.sh'* ]] && pass 'root hint is visible in header' || fail 'root hint is visible in header'
+[[ ${header} == *'Dieses Programm muss als Root gestartet werden.'* && ${header} == *'sudo ./svxlink_setup.sh'* ]] && pass 'root hint is visible in header' || fail 'root hint is visible in header'
+header_frame=$(printf '%s\n' "${header}" | awk '/^[+|]/')
+header_length=$(printf '%s\n' "${header_frame}" | awk 'NR == 1 { width=length($0) } length($0) != width { bad=1 } END { print bad ? "bad" : width }')
+expect "${header_length}" 65 'all header frame lines have identical length'
+if printf '%s\n' "${header_frame}" | awk '/^\|/ && ($0 !~ /^\|.*\|$/ || /\t/) { bad=1 } END { exit bad }'; then pass 'header content lines have fixed borders and no tabs'; else fail 'header content lines have fixed borders and no tabs'; fi
+[[ ${header} == *$'+---------------------------------------------------------------+\n\nDieses Programm'* ]] && pass 'header has exactly one blank line after frame' || fail 'header has exactly one blank line after frame'
 require_root && pass 'test mode bypasses root requirement' || fail 'test mode bypasses root requirement'
 
 menu_output=$(printf '9\n' | main)
@@ -51,6 +60,11 @@ start_output=$(printf '1\n1\n3\n9\n' | main)
 run_checks() { printf 'CHECK_ACTION_CALLED\n'; }
 check_output=$(main --check)
 [[ ${check_output} == *CHECK_ACTION_CALLED* && ${check_output} != *'1) Installieren / aktualisieren'* ]] && pass 'non-interactive check bypasses menu' || fail 'non-interactive check bypasses menu'
+[[ $(NO_COLOR=1 print_success 'Farben aus') != *$'\033['* ]] && pass 'NO_COLOR disables ANSI output' || fail 'NO_COLOR disables ANSI output'
+rg -q 'bzip2 ca-certificates cmake curl g\+\+ gcc git' "${ROOT}/svxlink_setup.sh" && pass 'central package list contains curl and archive tools' || fail 'central package list contains curl and archive tools'
+export SVXLINK_TEST_MISSING_COMMANDS=curl
+if require_base_tools >/dev/null 2>&1; then fail 'missing base dependency must prevent build prerequisites'; else pass 'missing base dependency prevents build prerequisites'; fi
+unset SVXLINK_TEST_MISSING_COMMANDS
 
 getent() {
     case $2 in
@@ -127,9 +141,10 @@ else
     pass 'production script contains no internal sudo commands'
 fi
 
+printf '\n============================================================\nTESTERGEBNIS\n============================================================\nErfolgreich: %d\nWarnungen:   0\nFehler:      %d\n' "${successes}" "${failures}"
 if (( failures == 0 )); then
-    printf 'Root, backup and sound permission simulation completed: all tests passed.\n'
+    printf 'Ergebnis:    ERFOLGREICH\n============================================================\n'
 else
-    printf 'Root, backup and sound permission simulation completed: %d failures.\n' "${failures}" >&2
+    printf 'Ergebnis:    FEHLGESCHLAGEN\n============================================================\n' >&2
     exit 1
 fi

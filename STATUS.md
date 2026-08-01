@@ -18,6 +18,7 @@
 - Die historischen Profile 1 (ICS Pi-Repeater), 2 (uSvxCard) und 3 (WM8960 Audio-HAT) sind wieder im Installer auswählbar. `tests/simulate_legacy_profiles.sh` prüft ihre Konfigurationspfade ohne Root und ohne Downloads.
 - Der Produktivstart verlangt Root über `sudo ./svxlink_setup.sh`; `SVXLINK_TEST_MODE=true` bleibt ohne Root nutzbar.
 - Die Rechteverwaltung für deutsche und englische Sounds normalisiert ausschließlich `de_DE` beziehungsweise `en_US` auf `svxlink:svxlink`, Verzeichnisse `0755` und reguläre Dateien `0644`.
+- Der reale Debian-13-VM-Updatepfad erkannte Rufzeichen und Profil 0 korrekt und baute SvxLink 26.05.1 erneut. Er brach danach wegen der fehlenden `curl`-Abhängigkeit ab; ein Wiederholungstest nach der Korrektur steht aus.
 
 ## Offen
 
@@ -25,6 +26,7 @@
 - Raspberry Pi mit ELENATA-Profil 4 einschließlich Audio, GPIO und produktivem Dienststart.
 - Aktuelle Raspberry-Pi-OS- und Debian-13-Hardwaretests für ICS Pi-Repeater, uSvxCard und WM8960 Audio-HAT.
 - Echtes Installations- und Hörtest-Ergebnis für die eingebetteten deutschen und offiziellen englischen Sounds.
+- Erneuter Debian-13-VM-Update- und Soundtest nach Aufnahme von `curl`, `tar` und `bzip2` in die Grundabhängigkeiten.
 - Externe deutsche RepeaterLogic.
 
 ## Grenzen der Profil-4-Simulation

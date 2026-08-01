@@ -5,6 +5,8 @@ set -Eeuo pipefail
 
 ROOT=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 readonly ROOT
+# shellcheck disable=SC1091
+source "${ROOT}/tests/test_output.sh"
 TEMP_DIR=$(mktemp -d)
 readonly TEMP_DIR
 export SVXLINK_TEST_MODE=true
@@ -20,11 +22,12 @@ export GPIO_CONFIG_FILE="${TEMP_DIR}/gpio.conf"
 export DRIVER_SOURCE_DIR="${TEMP_DIR}/drivers"
 
 failures=0
+successes=0
 MOCK_LOG="${TEMP_DIR}/mock.log"
 cleanup() { rm -rf "${TEMP_DIR}"; }
 trap cleanup EXIT
-pass() { printf 'PASS: %s\n' "$*"; }
-fail() { printf 'FAIL: %s\n' "$*" >&2; failures=$((failures + 1)); }
+pass() { test_line '[ OK ]' "$*"; successes=$((successes + 1)); }
+fail() { test_line '[FEHLER]' "$*" >&2; failures=$((failures + 1)); }
 expect_line() { grep -Fqx "$2" "$1" && pass "$3" || fail "$3"; }
 expect_count() { [[ $(grep -Fxc "$2" "$1" || true) == "$3" ]] && pass "$4" || fail "$4"; }
 snapshot_production_paths() {
@@ -51,6 +54,7 @@ assert_production_paths_unchanged() {
 # shellcheck disable=SC1091
 source "${ROOT}/svxlink_setup.sh"
 trap - ERR
+test_line '[TEST]' 'Historische Hardwareprofil-Simulation'
 
 install_packages_for_profile() { printf 'package <%s>\n' "$1" >>"${MOCK_LOG}"; }
 install_historical_driver() { printf 'driver <%s> <%s>\n' "$1" "$2" >>"${MOCK_LOG}"; }
@@ -95,4 +99,5 @@ expect_line "${BOOT_CONFIG_FILE}" 'dtoverlay=disable-bt' 'ELENATA remains separa
 snapshot_production_paths after
 assert_production_paths_unchanged
 
-if (( failures == 0 )); then printf 'Legacy profile simulation completed: all tests passed.\n'; else printf 'Legacy profile simulation completed: %d failures.\n' "${failures}" >&2; exit 1; fi
+printf '\n============================================================\nTESTERGEBNIS\n============================================================\nErfolgreich: %d\nWarnungen:   0\nFehler:      %d\n' "${successes}" "${failures}"
+if (( failures == 0 )); then printf 'Ergebnis:    ERFOLGREICH\n============================================================\n'; else printf 'Ergebnis:    FEHLGESCHLAGEN\n============================================================\n' >&2; exit 1; fi

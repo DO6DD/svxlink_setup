@@ -21,6 +21,7 @@
 - `DEFAULT_LANG` bleibt `en_US`, solange `sounds/de_DE` fehlt.
 - `--check` nach der Installation vollständig erfolgreich.
 - `lsof` zeigt keine offene gelöschte SvxLink-Logdatei.
+- Der normale Updatepfad erkannte Rufzeichen `DM0DOS` und Profil 0 korrekt, behielt die Konfiguration und installierte SvxLink 26.05.1. Der anschließende Sounddownload scheiterte vor dieser Korrektur an fehlendem `curl`; der erneute VM-Test steht aus.
 
 ### Gefundene und behobene Fehler
 
@@ -49,6 +50,7 @@
 - Prüft, dass ein fehlendes `de_DE` die Konfiguration nicht ändert und dass andere Sektionen unverändert bleiben.
 - Prüft keine Vollständigkeit, Audioheader oder Modulabdeckung deutscher Sounds, entsprechend der vorgesehenen Aktivierungslogik.
 - Die feste englische Quelle ist Release `25.05` von `sm0svx/svxlink-sounds-en_US-heather`, Archiv `svxlink-sounds-en_US-heather-16k-25.05.tar.bz2`, SHA-256 `e79e61bec17a24fad093edfb21e7f8ca51af33b9590db954b4789271db2957dd` und Archivwurzel `en_US-heather-16k/`.
+- Prüft kontrollierte Fehler bei fehlendem `curl`, `tar` und `bzip2`, ohne einen rohen `command not found`-Fehler zu erzeugen.
 
 ### `tests/simulate_root_backup_permissions.sh`
 
@@ -61,6 +63,7 @@
 - Prüft, dass die Sprachaktivierung Rechte vor `DEFAULT_LANG` normalisiert und bei einem Rechtefehler keine Konfiguration verändert.
 - Prüft den parameterlosen Start: Hauptmenü ohne Rufzeichen-, Profil-, Paket- oder Installationsaufruf; Menüpunkt 1 öffnet nur das Untermenü und erst dessen Punkt 1 startet den Installationspfad.
 - Prüft, dass `--check` gezielt ohne Menü ausgeführt wird.
+- Prüft den festen Headerrahmen sowie ANSI-freie Ausgabe mit `NO_COLOR`.
 
 ### `tests/simulate_legacy_profiles.sh`
 
