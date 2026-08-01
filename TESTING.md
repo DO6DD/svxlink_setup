@@ -39,6 +39,27 @@
 - Account-Setup für Raspberry Pi und Nicht-Raspberry-Pi.
 - Nicht-Pi-Profil 0.
 
+### `tests/simulate_sound_management.sh`
+
+- Prüft Menüanzeige ohne Blockierung sowie die nicht-interaktiven CLI-Hinweise.
+- Prüft das eingebettete Anna-16k-Archiv auf feste SHA-256 und Archivwurzel `de_DE-anna-16k/`.
+- Installiert deutsche und englische Testarchive ausschließlich in temporäre Testpfade; kein Root und keine Netzwerkverbindung sind erforderlich.
+- Prüft falsche Prüfsumme, Traversal, absolute Archivpfade und unsichere symbolische Links als kontrollierte Fehler; sichere interne Links des Anna-Archivs werden materialisiert.
+- Prüft Erhalt vorhandener deutscher Dateien, idempotente Installation, Sicherung der SvxLink-Konfiguration und sektionsgenaue Sprachumschaltung für `SimplexLogic` und `RepeaterLogic`.
+- Prüft, dass ein fehlendes `de_DE` die Konfiguration nicht ändert und dass andere Sektionen unverändert bleiben.
+- Prüft keine Vollständigkeit, Audioheader oder Modulabdeckung deutscher Sounds, entsprechend der vorgesehenen Aktivierungslogik.
+- Die feste englische Quelle ist Release `25.05` von `sm0svx/svxlink-sounds-en_US-heather`, Archiv `svxlink-sounds-en_US-heather-16k-25.05.tar.bz2`, SHA-256 `e79e61bec17a24fad093edfb21e7f8ca51af33b9590db954b4789271db2957dd` und Archivwurzel `en_US-heather-16k/`.
+
+### `tests/simulate_legacy_profiles.sh`
+
+- Zweck: Funktionssimulation der wiederhergestellten historischen Raspberry-Pi-Profile 1 bis 3 ohne Root, Netzwerkzugriff oder echte Systemänderungen.
+- Prüft die Zuordnung: Profil 1 ICS Pi-Repeater, Profil 2 uSvxCard und Profil 3 WM8960 Audio-HAT. Profil 0 und die separate ELENATA-Simulation für Profil 4 bleiben davon unberührt.
+- ICS: prüft `i2c-tools`, `i2c-dev`, die Deaktivierung von `snd-bcm2835` sowie die historischen Bootwerte `dtparam=audio=off`, `dtparam=i2c_arm=on`, `dtoverlay=fe-pi-audio`, `dtoverlay=i2s-mmap`, `dtoverlay=mcp23017,addr=0x20,gpiopin=12`, `dtoverlay=mcp3008:spi0-0-present,spi0-0-speed=3600000` und `enable_uart=1`.
+- uSvxCard: prüft `blacklist snd_bcm2835`, die historischen Anpassungen in `snd-card.conf`, den gemockten Aufruf der Quelle `https://github.com/respeaker/seeed-voicecard.git` und `/etc/svxlink/gpio.conf` mit PTT GPIO17, Squelch GPIO23 und Taster GPIO24.
+- WM8960: prüft den gemockten Aufruf der historischen Quelle `https://github.com/waveshare/WM8960-Audio-HAT`.
+- Prüft wiederholte Läufe ohne doppelte Konfigurationseinträge, die Trennung der Profile und SHA-256-/Metadatenvergleiche relevanter echter Dateien vor und nach dem Test.
+- Der Test mockt Paket- und Treiberinstallation. Er validiert weder Kernelmodule noch Treiberinstaller, Audio, GPIO oder Bootoverlays auf echter Hardware.
+
 ### `tests/simulate_elenata.sh`
 
 - Zweck: sichere Funktionssimulation der Profil-4-Komponenten ohne Root. Der Test ist kein vollständiger Root-Installationslauf und keine Hardwarevalidierung.
@@ -104,6 +125,8 @@ tests/simulate_elenata.sh
 - Zweiter Anschluss.
 - Produktiver Dienststart.
 - Deutsche Sounds.
+- Echter Installations- und Hörtest des eingebetteten Anna-16k-Satzes sowie des offiziellen englischen Satzes.
 - Externe deutsche RepeaterLogic.
+- Echte Hardwaretests für ICS Pi-Repeater, uSvxCard und WM8960 Audio-HAT auf aktueller Raspberry-Pi-OS-/Debian-13-Basis.
 
 Hardwarefunktionen gelten bis zum erfolgreichen Test auf der jeweiligen Zielhardware als nicht hardwarevalidiert.

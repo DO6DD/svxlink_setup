@@ -23,3 +23,12 @@
 - Profil-4-Test klar als Simulation ohne Hardwarevalidierung gekennzeichnet.
 - Profil-4-Funktionssimulation zusätzlich auf Debian 13 erfolgreich ausgeführt.
 - ShellCheck dort mangels installiertem Programm nicht ausgeführt; bereits auf dem Entwicklungsrechner bestanden.
+- Interaktives Startmenü und nicht-interaktive Sprachaktionen ergänzt.
+- Englischen Standardsatz aus einem versionsfixierten offiziellen SvxLink-Release mit SHA-256-Prüfung ergänzt.
+- Anna 16k als geprüftes Repositoryartefakt mit Herkunftsinformation und Prüfsummenmanifest ergänzt; Lizenz- und Weiterverbreitungsfragen bleiben offen.
+- Deutsche und englische Sprachinstallation, sichere Archivprüfung mit Materialisierung sicherer interner Links, Konfigurationssicherung und Sprachumschaltung ergänzt.
+- Deutsche Sprache wird nach erfolgreicher normaler Installation aktiviert; bei Fehlern bleibt Englisch aktiv.
+- Historische Hardwareprofile wiederhergestellt: Profil 1 ICS Pi-Repeater, Profil 2 uSvxCard und Profil 3 WM8960 Audio-HAT.
+- Hauptmenü, Installations-/Aktualisierungsuntermenü und Backup-Untermenü ergänzt; alle Profile 0 bis 4 bleiben erreichbar.
+- Simulation `tests/simulate_legacy_profiles.sh` für die historischen Profilzweige, Boot- und Moduleinträge, uSvxCard-GPIO sowie externe Treiberquellen ergänzt.
+- Die historischen Treiberquellen bleiben zunächst unpinned und bis zur Prüfung auf aktueller Raspberry-Pi-Hardware nicht hardwarevalidiert.

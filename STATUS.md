@@ -2,7 +2,7 @@
 
 - Aktueller Branch: `project-documentation`
 - Aktueller Stand: Debian-13-VM-Basistest bestanden.
-- Letzter bekannter getesteter Commit: `8781d0b`
+- Letzter bekannter getesteter Commit: `17fd665`
 
 ## Fertig
 
@@ -13,12 +13,17 @@
 - Bootkonfiguration, SvxLink-Konfiguration, GPIO-Zuordnung, ALSA-Aufrufe, Idempotenz und definierte Fehlerfälle sind simuliert geprüft.
 - Profil-4-Funktionssimulation zusätzlich direkt in der Debian-13-VM `svxlink-test` ohne `sudo` erfolgreich ausgeführt; alle Testfälle meldeten `PASS`.
 - ShellCheck war in der Debian-13-VM nicht installiert und wurde dort nicht ausgeführt; auf dem Entwicklungsrechner wurde ShellCheck erfolgreich ausgeführt.
+- Interaktives Startmenü sowie sichere Sprachverwaltung für Deutsch und Englisch sind per isolierter Simulation geprüft.
+- Der deutsche Anna-16k-Sprachsatz ist als geprüftes Archiv eingebettet; seine Lizenz- und Weiterverbreitungsfrage bleibt offen und wird nicht als Freigabe dargestellt.
+- Die historischen Profile 1 (ICS Pi-Repeater), 2 (uSvxCard) und 3 (WM8960 Audio-HAT) sind wieder im Installer auswählbar. `tests/simulate_legacy_profiles.sh` prüft ihre Konfigurationspfade ohne Root und ohne Downloads.
 
 ## Offen
 
 - Debian-12-VM-Test.
 - Raspberry Pi mit ELENATA-Profil 4 einschließlich Audio, GPIO und produktivem Dienststart.
-- Deutsche Sounds und externe deutsche RepeaterLogic.
+- Aktuelle Raspberry-Pi-OS- und Debian-13-Hardwaretests für ICS Pi-Repeater, uSvxCard und WM8960 Audio-HAT.
+- Echtes Installations- und Hörtest-Ergebnis für die eingebetteten deutschen und offiziellen englischen Sounds.
+- Externe deutsche RepeaterLogic.
 
 ## Grenzen der Profil-4-Simulation
 
@@ -28,4 +33,4 @@
 
 ## Nächster Schritt
 
-Raspberry Pi mit ELENATA-Profil 4 testen.
+Raspberry Pi mit einem der fünf Hardwareprofile auf aktueller Zielhardware testen; ELENATA-Profil 4 bleibt prioritär.

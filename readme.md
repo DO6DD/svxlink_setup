@@ -8,6 +8,12 @@ Für eine deutsche Erklärung siehe weiter unten.
 
 The SvxLink Server is a general purpose voice services system which, when connected to a transceiver, can act as both an advanced repeater system and can also operate on a simplex channel.
 
+## Current setup workflow
+
+Run `sudo ./svxlink_setup.sh` without parameters to open the interactive menu. It provides installation or update, read-only status, backup management, language installation and activation, and a safe configuration summary. The same actions are available through `--help`; non-interactive write actions require `--yes`.
+
+The normal installation installs the official English SvxLink sound release `25.05` and the bundled German Anna 16k archive. The English download uses HTTPS and the fixed SHA-256 `e79e61bec17a24fad093edfb21e7f8ca51af33b9590db954b4789271db2957dd`. German becomes the default language only after its archive has been verified and installed successfully; otherwise English remains active. The Anna archive provenance and checksum are documented in `resources/sounds/de_DE-anna-16k.SOURCE.md`. The project does not claim ownership of its recordings and does not claim that its unresolved licence and redistribution status is free.
+
 The SvxLink setup script arose from the requirement to establish a simple solution for the local NordWestLink network in order to provide all repeaters with the same current version of SvxLink. Chris, DF5KX, wrote the first lines of bash code based on an idea of NJ6N. Nils, DO6NP, added some more lines and that's how the storry goes. :-) The small script has meanwhile become a comprehensive setup solution for SvxLink.
 
 ## Features
@@ -27,11 +33,13 @@ The script offers the following features:
 
 The following Raspberry Pi HAT's are currently supported:
 
-1. WM8960 Audio HAT
-2. PI REPEATER board by ICS Controllers
-3. uSvxCard by F5SWB & F8ASB including Seeed VoiceCard
-4. ELENATa boards from SkyAndy aka DK1LO
-5. More to come?
+0. No Raspberry Pi audio profile
+1. ICS Pi-Repeater
+2. uSvxCard by F5SWB & F8ASB including Seeed VoiceCard
+3. WM8960 Audio HAT
+4. ELENATA Wolfson / Fe-Pi Audio
+
+Profiles 1 to 3 were restored from the historical installer implementation. Their driver branches are not pinned and need current-hardware validation; the separate ELENATA profile 4 is component-simulated but not hardware-validated.
 
 ## Installation
 
@@ -101,13 +109,15 @@ Das Skript bietet die folgenden Funktionen:
 
 ## Unterstützte HATs
 
-Die folgenden Raspberry-Pi-Aufsätze werden derzeit unterstützt:1. WM8960 Audio HAT
+Die folgenden Raspberry-Pi-Profile werden derzeit unterstützt:
 
-1. WM8960 Audio HAT
-2. PI REPEATER Karte von ICS Controllers, USA
-3. uSvxCard von F5SWB und F8ASB einschließlich Seeed VoiceCard
-4. ELENATa-Boards von DK1LO alias SkyAndy
-5. Mehr in Zukunft?
+0. Kein Raspberry-Pi-Audioprofil
+1. ICS Pi-Repeater
+2. uSvxCard von F5SWB und F8ASB einschließlich Seeed VoiceCard
+3. WM8960 Audio-HAT
+4. ELENATA Wolfson / Fe-Pi Audio
+
+Die Profile 1 bis 3 wurden aus der historischen Installer-Implementierung wiederhergestellt. Ihre Treiberzweige sind nicht gepinnt und müssen auf aktueller Zielhardware noch validiert werden; Profil 4 ist separat komponentensimuliert, aber ebenfalls noch nicht hardwarevalidiert.
 
 ## Installation
 
