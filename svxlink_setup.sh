@@ -1,609 +1,545 @@
-#!/bin/bash
-#
-# +---------------------------------------------------------------+
-# | SVXLINK Setup Script for Debian /  Raspberry Pi OS "Bookworm" |
-# |              (C) 2022-2025 DF5KX & DO6NP - BETA               |
-# +---------------------------------------------------------------+
-#
-# Changelog
-# ---------
-# 2025 03 30 | DO6NP | Added support for ELENATA boards
-# 2024 01 13 | DO6NP | Added Raspi checks
-# 2024 01 09 | DO6NP | Added LADSPA stuff for new SvxLink feature
-# 2023 11 26 | DO6NP | Some bugfixes, sudo's, some new ideas
-# 2023 09 29 | DF5KX | Installation order sorted
-# 2023 09 22 | DF5KX | Bugfixes
-# 2023 03 21 | DF5KX | Bugfixes
-# 2023 03 18 | DF5KX | Created version 2.0 for downward and linux compatibility
-# 2023 03 14 | DF5KX | dialout group for rs232 and wget for further inst added
-# 2022 09 27 | DO6NP | Added support for uSvxCard
-# 2022 09 18 | DO6NP | Added multilingual support and German messages
-# 2022 04 11 | DO6NP | Created version 2.0 including many new features 
-# 2022 04 09 | DO6NP | Added parameters for ICS Pi-Repeater
-# 2022 02 28 | DF5KX | initial release based on NJ6N's install script
-# 2022 01 02 | DF5KX | German voice Anna 16k added for installation
-# 
-################################################################################
-#
-# variables & constants
-CONF=/etc/svxlink/svxlink.conf
-FLAG="$HOME/.svxlink_installed"
-VERSIONS=$HOME/svxlink/src/versions
-BOOTCONFIG=/boot/config.txt
-IS_PI=false
-IS_DEBUG=false
-declare -A msgtext
-declare -r SCRIPT_VERSION="25.03.1" # Version number in the format: yy.mm.n
-declare -r LANG=$(locale | grep LANG | cut -d= -f2 | cut -d_ -f1)
-declare -r REQUIRED_OS_VER="12"
-declare -r REQUIRED_OS_NAME="Bookworm"
-declare -r MIN_PARTITION_SIZE=8000
-declare -r LOGFILE=$(basename $0 ..sh).log
+#!/usr/bin/env bash
+# SvxLink installation for Debian 12/13 and Raspberry Pi OS based on them.
 
-################################################################################
+set -Eeuo pipefail
 
-function set_messages {
-	if [[ $LANG = "de" ]]; then
-		msgtext["debug_info"]="Debug-Information"
-		msgtext["debug_partition_size"]="Größe Hauptpartition"
-		msgtext["debug_partition_needed"]="Benötigte Mindestgröße"
-		msgtext["debug_pi"]="Raspi erkannt"
-		msgtext["preparing"]="Bereite System vor"
-		msgtext["no_root"]="Skript darf nicht als Benutzer 'root' ausgeführt werden."
-		msgtext["no_connection"]="Internetverbindung fehlt!"
-		msgtext["unsupported_os"]="Warnung! Dieses Skript ist nur unter Debian und Debian Derivaten wie Raspberry OS getestet!"
-		msgtext["partition_too_small"]="Sorry, die Partition ist zu klein."
-		msgtext["first_run"]="ERSTER AUFRUF"
-		msgtext["deactivating_swap"]="Deaktiviere SWAP-Partition"
-		msgtext["activating_ramdisk"]="Aktiviere RAM-Disk"
-		msgtext["activating_logrotate"]="Aktiviere Logrotate"
-		msgtext["optimizing_system"]="Optimiere einige Systemeinstellungen"
-		msgtext["enter_callsign"]="Bitte Rufzeichen für Relais / Hotspot eingeben"
-		msgtext["reenter_callsign"]="Bitte erneut aufrufen und ein gültiges Rufzeichen eingeben!"
-		msgtext["choose_interface_1"]="Bitte wähle Dein Sound-Interface:"
-		msgtext["choose_interface_2"]="Bitte 1, 2, 3 oder 0 für kein Interface eingeben?"
-		msgtext["choose_interface_invalid"]="Bitte eine gültige Nummer eingeben!"
-		msgtext["choose_rtlsdr"]="Möchtest Du auch einen RTL-SDR-Treiber installieren (j/n)?" 
-		msgtext["wrong_answer"]="Fehlerhafte Antwort!"
-		msgtext["setup_creating_groups"]="Lege Gruppen und Benutzer an"
-		msgtext["setup_install_packages"]="Installiere benötigte Pakete"
-		msgtext["setup_packages_error"]="Installation der Pakete fehlgeschlagen, ABBRUCH!"
-		msgtext["setup_rtlsdr"]="Installiere RTL-SDR-Treiber"
-		msgtext["setup_wm8960"]="Installiere WM8960-Audio-Hat-Treiber"
-		msgtext["setup_git_error"]="Installation der Quellen fehlgeschlagen, ABBRUCH!"
-		msgtext["setup_ics_deactivating_onboard"]="Deaktiviere Onboard-HDMI-Soundkarte"
-		msgtext["setup_ics_activating_audio"]="Aktiviere Audio"
-		msgtext["setup_ics_installing_i2c"]="Installiere und aktiviere I2C-Bus und I2C-Schnittstellen"
-		msgtext["setup_ics_activating_ics"]="Aktiviere ICS-Controller-Intergration"
-		msgtext["setup_usvx_blacklisting"]="Schalte die Soundkarte des Raspberry ab"
-		msgtext["setup_usvx_installing_drivers"]="Installiere Treiber für die Seeed Voicecard Soundkarte"
-		msgtext["setup_usvx_gpio_preparing"]="Bereite Konfiguration der GPIO-Ports vor"
-		msgtext["setup_usvx_gpio_install"]="Installiere GPIO-Portkonfiguration für die uSvxCard"
-		msgtext["setup_elenata_deactivating_onboard"]="Deaktiviere Onboard-HDMI-Soundkarte"
-		msgtext["setup_elenata_activating_audio"]="Aktiviere Audio"
-		msgtext["install_svxlink_loading_sources"]="Lade SvxLink-Sourcecode herunter"
-		msgtext["setup_update_packages"]="Lade System-Updates"
-		msgtext["install_svxlink_loading_updates"]="Lade SvxLink-Update aus Repo"
-		msgtext["install_svxlink_current_version"]="Aktuelle Version"
-		msgtext["install_svxlink_new_version"]="Neue Version"
-		msgtext["install_svxlink_compiling"]="Kompiliere SvxLink"
-		msgtext["install_svxlink_cmake_error"]="cmake fehlgeschlagen, ABBRUCH!"
-		msgtext["install_svxlink_installing"]="Installiere SvxLink"
-		msgtext["install_svxlink_sounds_en_installing"]="Installiere englische Sounds"
-		msgtext["install_svxlink_sounds_en_installerror"]="Download Englisch fehlgeschlagen, mache weiter!"
-		msgtext["install_svxlink_sounds_de_installing"]="Installiere deutsche Sounds"
-		msgtext["install_svxlink_sounds_de_installerror"]="Download Deutsch fehlgeschlagen, mache trotzdem weiter!"
-		msgtext["setup_svxlink_backup"]="Erstelle Sicherheitskopie"
-		msgtext["setup_svxlink_customizing"]="Passe SvxLink-Konfiguration an"
-		msgtext["setup_svxlink_activating"]="Aktiviere SvxLink-Daemon"
-		msgtext["main_done"]="Installation abgeschlossen"
-	else
-		msgtext["debug_info"]="DEBUG"
-		msgtext["debug_partition_size"]="Size main volume"
-		msgtext["debug_partition_needed"]="Size needed"
-		msgtext["debug_pi"]="Raspberry Pi detected"
-		msgtext["preparing"]="Preparing system"
-		msgtext["no_root"]="Script must not be executed as 'root'."
-		msgtext["no_connection"]="Missing internet connection!"
-		msgtext["unsupported_os"]="Warning! This script has been designed for Debian and derivates such as Raspberry OS!"
-		msgtext["partition_too_small"]="Sorry, partition too small for installing SvxLink."
-		msgtext["first_run"]="FIRST RUN"
-		msgtext["deactivating_swap"]="Deactivating SWAP partition"
-		msgtext["activating_ramdisk"]="Activating tempfs"
-		msgtext["activating_logrotate"]="Activating logrotate"
-		msgtext["optimizing_system"]="Optimizing some settings"
-		msgtext["enter_callsign"]="Please enter callsing for repater / hotspot"
-		msgtext["reenter_callsign"]="Please run script again and enter a valid callsign."
-		msgtext["choose_interface_1"]="Please choose sound interface:"
-		msgtext["choose_interface_2"]="Please enter 1, 2, 3 or 0 for none:"
-		msgtext["choose_interface_invalid"]="Please enter a valid number."
-		msgtext["choose_rtlsdr"]="Do you wish to install the RTL SDR driver package (y/n)?" 
-		msgtext["wrong_answer"]="Wrong answer!"
-		msgtext["setup_creating_groups"]="Creating groups and users"
-		msgtext["setup_install_packages"]="Installing all needed packages"
-		msgtext["setup_packages_error"]="Installation failed, abborting"
-		msgtext["setup_rtlsdr"]="Installing RTL SDR drivers"
-		msgtext["setup_wm8960"]="Installing WM8960 audio hat drivers"
-		msgtext["setup_git_error"]="Error downloading sources"
-		msgtext["setup_ics_deactivating_onboard"]="Deactivating onboard HDMI soundchip"
-		msgtext["setup_ics_activating_audio"]="Activating audio"
-		msgtext["setup_ics_installing_i2c"]="Installing and activating I2C bus and ports"
-		msgtext["setup_ics_activating_ics"]="Activating ICS controller"
-		msgtext["setup_usvx_blacklisting"]="Blacklist the sound card of Raspberry"
-		msgtext["setup_usvx_installing_drivers"]="Installing driver for Seeed Voicecard"
-		msgtext["setup_usvx_gpio_preparing"]="Preparing GPIO port configuration"
-		msgtext["setup_usvx_gpio_install"]="Installing GPIO port configuration for uSvxCard"
-		msgtext["setup_elenata_deactivating_onboard"]="Deactivating onboard HDMI soundchip"
-		msgtext["setup_elenata_activating_audio"]="Activating audio"
-		msgtext["install_svxlink_loading_sources"]="Loading sources from Git repo"
-		msgtext["setup_update_packages"]="Loading system updates"
-		msgtext["install_svxlink_loading_updates"]="Loading SvxLink updates from Git"
-		msgtext["install_svxlink_current_version"]="Current version"
-		msgtext["install_svxlink_new_version"]="New version"
-		msgtext["install_svxlink_compiling"]="Compiling SvxLink"
-		msgtext["install_svxlink_cmake_error"]="Error while running cmake"
-		msgtext["install_svxlink_installing"]="Setting up SvxLink"
-		msgtext["install_svxlink_sounds_en_installing"]="Installing English sound files"
-		msgtext["install_svxlink_sounds_en_installerror"]="Error downloading files, continuing anyway"
-		msgtext["install_svxlink_sounds_de_installing"]="Installing German sound files"
-		msgtext["install_svxlink_sounds_de_installerror"]="Download Deutsch fehlgeschlagen, mache trotzdem weiter!"
-		msgtext["setup_svxlink_backup"]="Creating config backup"
-		msgtext["setup_svxlink_customizing"]="Customizing SvxLink config file"
-		msgtext["setup_svxlink_activating"]="Activating SvxLink daemon"
-		msgtext["main_done"]="Installation completed"
-	fi
+readonly SCRIPT_NAME=${0##*/}
+readonly SVXLINK_REPOSITORY="https://github.com/sm0svx/svxlink.git"
+readonly SVXLINK_USER="svxlink"
+readonly SVXLINK_GROUP="svxlink"
+readonly SVXLINK_CONFIG="/etc/svxlink/svxlink.conf"
+readonly SVXLINK_CONFIG_DIR="/etc/svxlink/svxlink.d"
+readonly SVXLINK_EVENTS_DIR="/usr/share/svxlink/events.d"
+readonly SVXLINK_EVENTS_LOCAL_DIR="/usr/share/svxlink/events.d/local"
+readonly SVXLINK_SOUNDS_DIR="/usr/share/svxlink/sounds"
+readonly SVXLINK_LOG="/var/log/svxlink"
+readonly APT_CONFIG="/etc/apt/apt.conf.d/20svxlink-disable-auto-updates"
+readonly LOGROTATE_CONFIG="/etc/logrotate.d/svxlink"
+
+INSTALL_USER=""
+INSTALL_HOME=""
+SOURCE_DIR=""
+BUILD_DIR=""
+BOOT_CONFIG=""
+OS_VERSION=""
+IS_RASPBERRY_PI=false
+HARDWARE_PROFILE=0
+SECOND_CONNECTOR=false
+CALLSIGN=""
+CAPTURE_LEFT=6
+CAPTURE_RIGHT=6
+
+log() {
+    printf '%s: %s\n' "${SCRIPT_NAME}" "$*"
 }
 
-function echo() {
-	builtin echo "`date +%T`: $@"
-	if $IS_DEBUG; then
-		builtin echo "`date +%T`: $@" >> $LOGFILE
-	fi
+die() {
+    log "ERROR: $*"
+    exit 1
 }
 
-################################################################################
+on_error() {
+    local exit_code=$?
+    log "ERROR: command failed at line ${BASH_LINENO[0]} (exit ${exit_code})"
+    exit "${exit_code}"
+}
+trap on_error ERR
 
-# *** Some functions for start checkup ***
+require_root() {
+    [[ ${EUID} -eq 0 ]] || die "Run the script with sudo: sudo ./${SCRIPT_NAME}"
+    [[ -n ${SUDO_USER:-} && ${SUDO_USER} != "root" ]] || die "Run the script through sudo from a regular user account."
 
-function check_root {
-	if [[ $EUID = 0 ]]; then
-		echo "*** ${msgtext["no_root"]}"
-		exit 1
-	fi	
+    INSTALL_USER=${SUDO_USER}
+    INSTALL_HOME=$(getent passwd "${INSTALL_USER}" | cut -d: -f6)
+    [[ -n ${INSTALL_HOME} && ${INSTALL_HOME} != "/root" ]] || die "Could not determine the invoking user's home directory."
+    SOURCE_DIR="${INSTALL_HOME}/svxlink"
+    BUILD_DIR="${SOURCE_DIR}/src/build"
 }
 
-function check_os {
-	if (grep -q "$REQUIRED_OS_VER." /etc/debian_version); then
-		DEBIAN_VERSION="$REQUIRED_OS_VER"
-	else
-		DEBIAN_VERSION="UNSUPPORTED"
-	fi
-	if [ "$DEBIAN_VERSION" != "$REQUIRED_OS_VER" ]; then
-		echo "*** ${msgtext["unsupported_os"]} $REQUIRED_OS_VER (\"$REQUIRED_OS_NAME\")."
-		exit 1
-	fi
-	if [ -e "/etc/os-release" ]; then
-		OSTYPE=`grep "^NAME=" /etc/os-release | awk -F= '{print $2}'`
-		if [ "$OSTYPE" = "Raspbian GNU/Linux" ]; then
-			IS_PI=true
-		fi
-	else
-		echo "*** ${msgtext["unsupported_os"]} $REQUIRED_OS_VER (\"$REQUIRED_OS_NAME\")."
-		exit 1
-	fi
-	if (uname -a | grep -q rpi); then
-		IS_PI=true
-	fi
-	if [ -e "/boot/firmware/config.txt" ]; then
-		BOOTCONFIG=/boot/firmware/config.txt
-	fi
-	if $IS_DEBUG; then
-		echo "*** ${msgtext["debug_info"]}"
-		echo "${msgtext["debug_pi"]}: $IS_PI"
-		cat /etc/os-release >> $LOGFILE
-	fi
+backup_file() {
+    local file=$1
+    local backup_dir=/var/backups/svxlink-setup
+
+    [[ -e ${file} ]] || return 0
+    install -d -m 0750 "${backup_dir}"
+    cp -a "${file}" "${backup_dir}/$(basename "${file}").$(date +%Y%m%d%H%M%S%N).bak"
 }
 
-function update_and_prepare {
-	echo "*** ${msgtext["preparing"]}"
-	sudo apt-get -qq update
-	if [ $? -ne 0 ]; then
-		echo "*** ${msgtext["no_connection"]}"
-		exit 1
-	fi
-	sudo apt-get -qq -y upgrade
-	if [ $? -ne 0 ]; then
-		echo "*** ${msgtext["no_connection"]}"
-		exit 1
-	fi
-	sudo apt-get -qq -y dist-upgrade
-	if [ $? -ne 0 ]; then
-		echo "*** ${msgtext["no_connection"]}"
-		exit 1
-	fi
+detect_operating_system() {
+    [[ -r /etc/os-release ]] || die "Missing /etc/os-release."
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    OS_VERSION=${VERSION_ID:-}
+
+    case ${ID:-} in
+        debian|raspbian) ;;
+        *) die "Unsupported operating system: ${PRETTY_NAME:-unknown}. Only Debian 12/13 and Raspberry Pi OS are supported." ;;
+    esac
+    [[ ${OS_VERSION} == "12" || ${OS_VERSION} == "13" ]] || \
+        die "Unsupported Debian version: ${OS_VERSION:-unknown}. Only Debian 12 and 13 are supported."
+
+    if [[ -r /proc/device-tree/model ]] && tr -d '\0' </proc/device-tree/model | grep -qi 'raspberry pi'; then
+        IS_RASPBERRY_PI=true
+    elif [[ ${ID:-} == "raspbian" ]]; then
+        IS_RASPBERRY_PI=true
+    fi
+
+    if ${IS_RASPBERRY_PI}; then
+        if [[ -f /boot/firmware/config.txt ]]; then
+            BOOT_CONFIG=/boot/firmware/config.txt
+        elif [[ -f /boot/config.txt ]]; then
+            BOOT_CONFIG=/boot/config.txt
+        else
+            die "Raspberry Pi detected but neither /boot/firmware/config.txt nor /boot/config.txt exists."
+        fi
+    fi
 }
 
-function check_filesystem {
-	PARTITION_SIZE=0
-	PARTITION_SIZE=$(df -m | awk '$6=="/"{print$2}')
-	if [ $PARTITION_SIZE -le $MIN_PARTITION_SIZE ]; then
-		echo "*** ${msgtext["partition_too_small"]}"
-		exit -1
-	fi
-	if $IS_DEBUG; then
-		echo "*** ${msgtext["debug_info"]}"		
-		echo "${msgtext["debug_partition_size"]}: $PARTITION_SIZE"
-		echo "${msgtext["debug_partition_needed"]}: $MIN_PARTITION_SIZE"
-	fi
+disable_automatic_updates() {
+    local unit
+    local -a units=(apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service)
+
+    for unit in "${units[@]}"; do
+        systemctl disable --now "${unit}" 2>/dev/null || true
+        systemctl mask "${unit}" 2>/dev/null || true
+    done
+
+    if dpkg-query -W -f='${db:Status-Status}' unattended-upgrades 2>/dev/null | grep -qx installed; then
+        systemctl disable --now unattended-upgrades.service 2>/dev/null || true
+        systemctl mask unattended-upgrades.service 2>/dev/null || true
+    fi
+
+    backup_file "${APT_CONFIG}"
+    install -m 0644 /dev/stdin "${APT_CONFIG}" <<'EOF'
+APT::Periodic::Enable "0";
+APT::Periodic::Update-Package-Lists "0";
+APT::Periodic::Unattended-Upgrade "0";
+EOF
 }
 
-################################################################################
+install_packages() {
+    local -a packages=(
+        ca-certificates cmake g++ git libasound2-dev libcurl4-openssl-dev
+        libgcrypt-dev libgpiod-dev libgsm1-dev libjsoncpp-dev libogg-dev
+        libopus-dev libopusenc-dev libpopt-dev libsigc++-2.0-dev libsndfile1-dev
+        libspeex-dev libspeexdsp-dev libssl-dev libvorbis-dev logrotate make
+        tcl-dev alsa-utils lsof
+    )
 
-# *** Install for the first time
+    if ${IS_RASPBERRY_PI}; then
+        packages+=(gpiod)
+    fi
 
-function install_firstrun {
-	echo "*** ${msgtext["first_run"]} ***"
-
-	if $IS_PI; then
-		echo "${msgtext["deactivating_swap"]}"
-		sudo swapoff -a
-		sudo service dphys-swapfile stop
-		sudo systemctl disable dphys-swapfile
-		sudo apt-get -qq -y purge dphys-swapfile
-		sudo systemctl disable apt-daily.service apt-daily.timer apt-daily-upgrade.service apt-daily-upgrade.timer
-		echo "${msgtext["activating_ramdisk"]}"
-		builtin echo "tmpfs   /var/log                tmpfs   nodev,noatime,nosuid,mode=0777,size=128m        0       0"	| sudo tee -a /etc/fstab > /dev/null
-		builtin echo "tmpfs   /tmp                    tmpfs   nodev,noatime,nosuid,mode=0777,size=128m        0       0"	| sudo tee -a /etc/fstab > /dev/null
-		## --- Remark in case of trubles:
-		## Create /etc/tmpfiles.d/Software.conf with following content:
-		## d /var/log/Software 0777 User Group - -
-		sudo mount -a
-		sudo systemctl daemon-reload
-	fi
-	
-	echo "${msgtext["activating_logrotate"]}"
-	builtin echo "/var/log/svxlink {" | sudo tee -a /etc/logrotate.d/svxlink > /dev/null
-	builtin echo "  daily" | sudo tee -a /etc/logrotate.d/svxlink > /dev/null
-	builtin echo "  rotate 14" | sudo tee -a /etc/logrotate.d/svxlink > /dev/null
-	builtin echo "  missingok" | sudo tee -a /etc/logrotate.d/svxlink > /dev/null
-	builtin echo "  notifempty" | sudo tee -a /etc/logrotate.d/svxlink > /dev/null
-	builtin echo "  compress" | sudo tee -a /etc/logrotate.d/svxlink > /dev/null
-	builtin echo "  dateext" | sudo tee -a /etc/logrotate.d/svxlink > /dev/null
-	builtin echo "}" | sudo tee -a /etc/logrotate.d/svxlink > /dev/null
-	sudo systemctl restart logrotate
-
-	if $IS_PI; then
-		echo "*** ${msgtext["optimizing_system"]}"
-		sudo systemctl stop ModemManager.service
-		sudo systemctl disable ModemManager.service
-		sudo apt-get -qq -y purge modemmanager
-		sudo sed -i "s/dtoverlay=vc4-kms-v3d/dtoverlay=vc4-kms-v3d,audio=off/" $BOOTCONFIG
-		sudo sed -i "s/camera_auto_detect=1/#camera_auto_detect=1/" $BOOTCONFIG
-		builtin echo "# *** Inserted by SVXLINK Setup Script"	| sudo tee -a $BOOTCONFIG > /dev/null
-		builtin echo "dtoverlay=disable-bt"                  | sudo tee -a $BOOTCONFIG > /dev/null
-		sudo systemctl stop hciuart
-		sudo systemctl disable hciuart
-	fi
-	sudo apt-get -qq -y autoremove
-	
-	read -p "${msgtext["enter_callsign"]}: " CALL
-	if [ "$CALL" == "" ]; then
-		builtin echo "${msgtext["reenter_callsign"]}"
-		exit 1
-	fi
-	if $IS_PI; then
-		builtin echo "${msgtext["choose_interface_1"]}"
-		builtin echo "1) WM8960 Audio HAT"
-		builtin echo "2) PI-REPEATER board (ICS Controllers)"
-		builtin echo "3) uSvxCard (F5SWB & F8ASB)"
-		builtin echo "4) ELENATA (from / ab TL5v1)"
-		builtin echo "0) None"
-		while :; do
-			read -p "${msgtext["choose_interface_2"]} " AUDIO
-			[[ $AUDIO =~ ^[0-3]+$ ]] || { echo "${msgtext["choose_interface_invalid"]}"; continue; }
-			if ((audio >= 0 && audio <= 3)); then
-				builtin echo "Ok."
-				break
-			else
-				echo "${msgtext["choose_interface_invalid"]}"
-			fi
-		done
-		while true; do
-			read -p "${msgtext["choose_rtlsdr"]} " YN
-			case $YN in
-				[JjYyZz]* ) RTLSDR=true; break;;
-				[Nn]* ) RTLSDR=false; break;;
-				* ) builtin echo ${msgtext["wrong_answer"]};;
-			esac
-		done
-	fi
-	
-	# Setting up the system basics
-	echo "${msgtext["setup_creating_groups"]} ..."
-	sudo groupadd -r svxlink
-	sudo useradd -r -g svxlink -G audio,nogroup,plugdev,dialout -d /etc/svxlink -c "SvxLink daemon" svxlink
-	if $IS_PI; then
-		sudo usermod -aG gpio svxlink
-	fi
-	echo "${msgtext["setup_install_packages"]} ..."
-	sudo apt-get -y --fix-missing install git wget tar vim nano logrotate \
-              g++ make libsigc++-2.0-dev \
-              libgsm1-dev libpopt-dev tcl-dev \
-              libgcrypt-dev libspeex-dev \
-              libasound2-dev libsndfile1 alsa-utils \
-              sox lame libmp3lame0 vorbis-tools libogg-dev \
-              cmake curl cron ntp \
-              libjsoncpp-dev libopus-dev \
-              libssl-dev libcurl4-openssl-dev groff doxygen graphviz \
-              ladspa-sdk swh-plugins tap-plugins
-	if [ $? -ne 0 ]; then
-		echo "*** ${msgtext["setup_packages_error"]}"
-		exit -1
-	fi
-	if $IS_PI; then
-		sudo apt-get -y --fix-missing install gpiod libgpiod-dev
-		if [ $? -ne 0 ]; then
-			echo "*** ${msgtext["setup_packages_error"]}"
-			exit -1
-		fi
-	fi
-	if $RTLSDR; then
-		echo "${msgtext["setup_rtlsdr"]} ..."
-		sudo apt-get -y --fix-missing install librtlsdr-dev rtl-sdr python3-serial
-		if [ $? -ne 0 ]; then
-			echo "*** ${msgtext["setup_packages_error"]}"
-			exit -1
-		fi
-	fi
-
-	# Install drivers and stuff for audio HAT's if neeeded
-	if [ $AUDIO == 1 ]; then
-		echo "${msgtext["setup_wm8960"]} ..."
-		git clone https://github.com/waveshare/WM8960-Audio-HAT --quiet
-		if [ $? -ne 0 ]; then
-			echo "*** ${msgtext["setup_git_error"]}"
-			exit -1
-		fi
-		cd WM8960-Audio-HAT
-		sudo ./install.sh
-	elif [ $AUDIO == 2 ]; then
-		echo "${msgtext["setup_ics_deactivating_onboard"]} ..."
-		sudo sed -i "s/dtparam=audio=on/dtparam=audio=off/" $BOOTCONFIG 
-		echo "${msgtext["setup_ics_activating_audio"]} ..."
-		sudo sed -i "s/snd-bcm2835/#snd-bcm2835/" /etc/modules
-		echo "${msgtext["setup_ics_installing_i2c"]} ..."
-		sudo apt-get -y --fix-missing install i2c-tools
-		if [ $? -ne 0 ]; then
-			echo "*** ${msgtext["setup_packages_error"]}"
-			exit -1
-		fi
-		sudo sed -i "s/#dtparam=i2c_arm=on/dtparam=i2c_arm=on/" $BOOTCONFIG
-		echo "i2c-dev" | sudo tee -a /etc/modules > /dev/null
-		echo "${msgtext["setup_ics_activating_ics"]} ..."
-		builtin echo "# *** Inserted by SvxLink setup script" | sudo tee -a $BOOTCONFIG > /dev/null
-		builtin echo "#Enable FE-Pi Overlay" | sudo tee -a $BOOTCONFIG > /dev/null
-		builtin echo "dtoverlay=fe-pi-audio" | sudo tee -a $BOOTCONFIG > /dev/null
-		builtin echo "dtoverlay=i2s-mmap" | sudo tee -a $BOOTCONFIG > /dev/null
-		builtin echo "#Enable mcp23s17 Overlay" | sudo tee -a $BOOTCONFIG > /dev/null
-		builtin echo "dtoverlay=mcp23017,addr=0x20,gpiopin=12" | sudo tee -a $BOOTCONFIG > /dev/null
-		builtin echo "#Enable mcp3008 adc overlay" | sudo tee -a $BOOTCONFIG > /dev/null
-		builtin echo "dtoverlay=mcp3008:spi0-0-present,spi0-0-speed=3600000" | sudo tee -a $BOOTCONFIG > /dev/null
-		builtin echo "# Enable UART for serial console" | sudo tee -a $BOOTCONFIG > /dev/null
-		builtin echo "enable_uart=1" | sudo tee -a $BOOTCONFIG > /dev/null
-	elif [ $AUDIO == 3 ]; then
-		echo "${msgtext["setup_usvx_blacklisting"]} ..."
-		builtin echo "blacklist snd_bcm2835" | sudo tee -a /etc/modprobe.d/raspi-blacklist.conf > /dev/null
-		if [ -e "/lib/modprobe.d/snd-card.conf" ]; then
-			sudo sed -i "s/options snd_usb_audio index=0/#options snd_usb_audio index=0/" /lib/modprobe.d/snd-card.conf 
-			sudo sed -i "s/options snd slots=snd_usb_audio,snd-bcm2835/#options snd slots=snd_usb_audio,snd-bcm2835/" /lib/modprobe.d/snd-card.conf 
-		fi
-		echo "${msgtext["setup_usvx_installing_drivers"]} ..."
-		git clone https://github.com/respeaker/seeed-voicecard.git --quiet
-		if [ $? -ne 0 ]; then
-			echo "*** ${msgtext["setup_git_error"]}"
-			exit -1
-		fi
-		cd seeed-voicecard
-		sudo ./install.sh
-		echo "${msgtext["setup_usvx_gpio_preparing"]} ..."
-		builtin echo "###############################################################################" | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-		builtin echo "#                                                                             #" | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-		builtin echo "# Configuration file for the SvxLink server GPIO Pins                         #" | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-		builtin echo "# Created using SvxLink setup script by DO6NP and DF5KX for uSvxCard          #" | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-		builtin echo "#                                                                             #" | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-		builtin echo "###############################################################################" | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-		builtin echo "#                                                                             #" | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-		builtin echo "# *** GPIO 17: PTT                                                            #" | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-		builtin echo "# *** GPIO 23: SQUELCH                                                        #"  | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-		builtin echo "# *** GPIO 24: PUSH BUTTON                                                    #"  | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-		builtin echo "#                                                                             #"  | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-		builtin echo "###############################################################################" | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-		builtin echo "# GPIO system pin path" | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-		builtin echo "GPIO_PATH=/sys/class/gpio" | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-		builtin echo "# Space separated list of GPIO pins that point IN and have an" | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-		builtin echo "# Active HIGH state (3.3v = ON, 0v = OFF)" | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-		builtin echo "GPIO_IN_HIGH=\"gpio23 gpio24\"" | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-		builtin echo "# Space separated list of GPIO pins that point IN and have an" | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-		builtin echo "# Active LOW state (0v = ON, 3.3v = OFF)" | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-		builtin echo "GPIO_IN_LOW=\"\"" | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-		builtin echo "# Space separated list of GPIO pins that point OUT and have an" | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-		builtin echo "# Active HIGH state (3.3v = ON, 0v = OFF)" | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-		builtin echo "GPIO_OUT_HIGH=\"gpio17\"" | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-		builtin echo "# Space separated list of GPIO pins that point OUT and have an" | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-		builtin echo "# Active LOW state (0v = ON, 3.3v = OFF)" | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-		builtin echo "GPIO_OUT_LOW=\"\"" | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-		builtin echo "# User that should own the GPIO device files"  | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-		builtin echo "GPIO_USER=\"svxlink\"" | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-		builtin echo "# Group for the GPIO device files"  | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-		builtin echo "GPIO_GROUP=\"svxlink\"" | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-		builtin echo "# File access mode for the GPIO device files" | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-		builtin echo "GPIO_MODE=\"0664\"" | sudo tee -a /usr/src/seeed-voicecard/svxlink_gpio.conf > /dev/null
-	elif [ $AUDIO == 4 ]; then
-	echo "${msgtext["setup_elenata_deactivating_onboard"]} ..."
-		sudo sed -i "s/dtparam=audio=on/dtparam=audio=off/" $BOOTCONFIG 
-		echo "${msgtext["setup_elenata_activating_audio"]} ..."
-		builtin echo "# *** Inserted by SvxLink setup script V$SCRIPT_VERSION" | sudo tee -a $BOOTCONFIG > /dev/null
-		builtin echo "[all]" | sudo tee -a $BOOTCONFIG > /dev/null
-		builtin echo "#Enable FE-Pi Overlay" | sudo tee -a $BOOTCONFIG > /dev/null
-		builtin echo "dtoverlay=fe-pi-audio" | sudo tee -a $BOOTCONFIG > /dev/null
-		sudo sed -i "s/dtoverlay=vc4-kms-v3d/dtoverlay=vc4-kms-v3d.noaudio/" $BOOTCONFIG 
-	# xxx
-	fi
-	
-	# Installing SvxLink for the first time
-	echo "${msgtext["install_svxlink_loading_sources"]} ... "
-	git clone https://github.com/sm0svx/svxlink.git --quiet
-	if [ $? -ne 0 ]; then
-		echo "*** ${msgtext["setup_git_error"]}"
-		exit -1
-	fi
-	mkdir $HOME/svxlink/src/build
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "${packages[@]}"
 }
 
-################################################################################
+ensure_svxlink_account() {
+    local group
+    for group in audio dialout plugdev; do
+        getent group "${group}" >/dev/null || log "Optional system group is unavailable: ${group}"
+    done
+    if ${IS_RASPBERRY_PI}; then
+        getent group gpio >/dev/null || die "Raspberry Pi group gpio is unavailable."
+    fi
 
-# *** Install updates ***
+    getent group "${SVXLINK_GROUP}" >/dev/null || groupadd --system "${SVXLINK_GROUP}"
+    id -u "${SVXLINK_USER}" >/dev/null 2>&1 || \
+        useradd --system --gid "${SVXLINK_GROUP}" --home-dir /nonexistent --shell /usr/sbin/nologin --comment "SvxLink daemon" "${SVXLINK_USER}"
 
-function install_update {
-	echo "${msgtext["setup_update_packages"]} ..."
-	echo "${msgtext["install_svxlink_loading_updates"]} ..."
-	cd $HOME/svxlink
-	VERSION=`grep "SVXLINK=" $VERSIONS | awk -F= '{print $2}'`
-	echo "${msgtext["install_svxlink_current_version"]}: $VERSION"
-	git config pull.rebase true
-	git pull --quiet
-	if [ "$?" != 0 ]; then
-		echo "${msgtext["setup_git_error"]}"
-		exit 1
-	fi
-	NEWVERSION=`grep "SVXLINK=" $VERSIONS | awk -F= '{print $2}'`
-	echo "${msgtext["install_svxlink_new_version"]}: $NEWVERSION"
+    for group in audio dialout plugdev; do
+        getent group "${group}" >/dev/null && usermod -a -G "${group}" "${SVXLINK_USER}"
+    done
+    ${IS_RASPBERRY_PI} && usermod -a -G gpio "${SVXLINK_USER}"
 }
 
-################################################################################
-
-# *** Compile and install SvxLink (new + update) ***
-
-function install_svxlink {
-	echo "${msgtext["install_svxlink_compiling"]} ..."
-	cd $HOME/svxlink/src/build
-	cmake -DUSE_QT=OFF -DCMAKE_INSTALL_PREFIX=/usr -DSYSCONF_INSTALL_DIR=/etc -DLOCAL_STATE_DIR=/var -DWITH_SYSTEMD=ON ..
-	#cmake -DUSE_QT=OFF -DCMAKE_INSTALL_PREFIX=/usr -DSYSCONF_INSTALL_DIR=/etc -DLOCAL_STATE_DIR=/var -DWITH_SYSTEMD=ON -DWITH_CONTRIB_SIP_LOGIC=ON ..
-	if [ $? != 0 ];then
-		echo "${msgtext["install_svxlink_cmake_error"]}"
-		exit 1
-	fi
-	echo "${msgtext["install_svxlink_compiling"]} ..."
-	make
-	make doc
-	echo "${msgtext["install_svxlink_installing"]} ..."
-	sudo make install
-	sudo ldconfig
+prompt_callsign() {
+    while :; do
+        read -r -p "Rufzeichen, Relais- oder Knotenname: " CALLSIGN
+        CALLSIGN=${CALLSIGN^^}
+        [[ ${CALLSIGN} =~ ^[A-Z0-9][A-Z0-9_-]{2,15}$ ]] && return 0
+        log "Ungültige Eingabe. Erlaubt sind 3 bis 16 Großbuchstaben, Ziffern, Bindestrich und Unterstrich."
+    done
 }
 
-################################################################################
+choose_hardware_profile() {
+    ${IS_RASPBERRY_PI} || return 0
 
-# *** Install all sound files (EN + DE) ***
+    log "Hardwareprofil auswählen:"
+    log "  0) Kein Raspberry-Pi-Audioprofil"
+    log "  4) ELENATA Wolfson / Fe-Pi Audio"
 
-function install_sounds {
-	echo "${msgtext["install_svxlink_sounds_en_installing"]} ..."
-	cd /usr/share/svxlink/sounds
-	sudo git clone https://github.com/sm0svx/svxlink-sounds-en_US-heather.git --quiet
-	if [ $? -ne 0 ]; then
-		echo "*** ${msgtext["install_svxlink_sounds_en_installerror"]}"
-	else
-		sudo $HOME/svxlink/src/svxlink/scripts/filter_sounds.sh svxlink-sounds-en_US-heather en_US-heather-16k
-		sudo ln -s en_US-heather-16k en_US
-	fi
-	if [[ $LANG == "de" ]]; then
-		# Install German language pack 'Petra' by DL1HRC
-		echo "${msgtext["install_svxlink_sounds_de_installing"]} ..."
-		sudo git clone https://github.com/dl1hrc/svxlink-sounds-de_DE-petra.git --quiet
-		if [ $? -ne 0 ]; then
-			echo "*** ${msgtext["install_svxlink_sounds_de_installerror"]}"
-		else
-			sudo ln -s svxlink-sounds-de_DE-petra de_DE
-		fi
-		sudo wget -q https://server42.net/svxlink/de_DE-anna-16k.tar.bz2
-		if [ $? -ne 0 ]; then
-			echo "*** ${msgtext["install_svxlink_sounds_de_installerror"]}"
-		else
-			sudo tar xjf de_DE-anna-16k.tar.bz2
-			#sudo ln -s de_DE-anna-16k de_DE
-		fi
-		sudo rm *.bz2
-	fi
-	sudo chown -R svxlink:svxlink /usr/share/svxlink/sounds/*
+    while :; do
+        read -r -p "Auswahl (0 oder 4): " HARDWARE_PROFILE
+        [[ ${HARDWARE_PROFILE} == 0 || ${HARDWARE_PROFILE} == 4 ]] || \
+            { log "Ungültige Auswahl. Erlaubt sind 0 und 4."; continue; }
+        break
+    done
+
+    if [[ ${HARDWARE_PROFILE} == 4 ]]; then
+        while :; do
+            read -r -p "Zweiten Anschluss vorbereiten (j/n): " answer
+            case ${answer,,} in
+                j|ja|y|yes) SECOND_CONNECTOR=true; break ;;
+                n|nein|no) break ;;
+                *) log "Bitte j oder n eingeben." ;;
+            esac
+        done
+        CAPTURE_LEFT=$(prompt_level "Capture-Pegel links" 6)
+        CAPTURE_RIGHT=$(prompt_level "Capture-Pegel rechts" 6)
+    fi
 }
 
-################################################################################
-
-# *** Setup SvxLink (change some settings) ***
-
-function setup_svxlink {
-	echo "*** ${msgtext["setup_svxlink_backup"]}"
-	sudo cp -p $CONF $CONF.bak
-	echo "*** ${msgtext["setup_svxlink_customizing"]}"
-	#sudo sed -i 's/DEEMPHASIS=0/DEEMPHASIS=1/' $CONF
-	sudo sed -i "s/MYCALL/$CALL/g" $CONF
-	sudo sed -i "s/DEFAULT_LANG/de_DE/g" $CONF
-	sudo sed -i 's/SQL_HANGTIME=2000/SQL_HANGTIME=0/' $CONF
-	sudo sed -i 's/PEAK_METER=1/PEAK_METER=0/' $CONF
-	sudo sed -i -e "s/^DTMF_CTRL_PTY*=.*/DTMF_CTRL_PTY=\/tmp\/dtmf_ctrl" $CONF
-	if [ -e "/usr/src/seeed-voicecard/svxlink_gpio.conf" ]; then
-		echo "${msgtext["setup_usvx_gpio_install"]} ..."
-		sudo cp -p /usr/src/seeed-voicecard/svxlink_gpio.conf /etc/svxlink/gpio.conf
-	fi
-
-	echo "*** ${msgtext["setup_svxlink_activating"]}"
-	#sudo systemctl enable svxlink_gpio_setup
-	sudo systemctl enable svxlink
+prompt_level() {
+    local label=$1
+    local default=$2
+    local value
+    while :; do
+        read -r -p "${label} (0-15, Standard ${default}): " value
+        value=${value:-${default}}
+        [[ ${value} =~ ^([0-9]|1[0-5])$ ]] && { printf '%s\n' "${value}"; return 0; }
+        log "Ungültiger Pegel. Erlaubt ist 0 bis 15."
+    done
 }
 
-################################################################################
+ensure_boot_line() {
+    local line=$1
+    local key
+    local active_pattern
+    local temporary
+    local active_count
 
-# *** MAIN PROGRAM ***
+    case ${line} in
+        dtparam=*)
+            key="dtparam=${line#dtparam=}"
+            key=${key%=*}
+            active_pattern="^[[:space:]]*${key//./\\.}="
+            ;;
+        dtoverlay=*)
+            key="dtoverlay=${line#dtoverlay=}"
+            active_pattern="^[[:space:]]*${key//./\\.}([[:space:]]*$|,)"
+            ;;
+        *) die "Unsupported boot setting: ${line}" ;;
+    esac
+    active_count=$(grep -cE "${active_pattern}" "${BOOT_CONFIG}" || true)
+    if [[ ${active_count} == 1 ]] && grep -qE "^[[:space:]]*${line//./\\.}[[:space:]]*$" "${BOOT_CONFIG}"; then
+        return 0
+    fi
+    temporary=$(mktemp)
+    if (( active_count > 0 )); then
+        awk -v pattern="${active_pattern}" -v line="${line}" '
+            $0 ~ pattern {
+                if (!written) print line
+                written=1
+                next
+            }
+            { print }
+        ' "${BOOT_CONFIG}" >"${temporary}"
+        install -m 0644 "${temporary}" "${BOOT_CONFIG}"
+        rm -f "${temporary}"
+    else
+        printf '\n%s\n' "${line}" >>"${BOOT_CONFIG}"
+    fi
+}
 
-echo
-echo "+---------------------------------------------------------------+"
-echo "| SVXLINK Setup Script for Debian / Raspberry Pi OS  \"Bookworm\" |"
-echo "|         V$SCRIPT_VERSION - (C) 2022-2025 DF5KX & DO6NP - BETA         |"
-echo "+---------------------------------------------------------------+"
-echo
+configure_elenata_boot() {
+    ${IS_RASPBERRY_PI} || die "ELENATA is only supported on a Raspberry Pi."
+    backup_file "${BOOT_CONFIG}"
+    ensure_boot_line "dtparam=i2c0=on"
+    ensure_boot_line "dtparam=i2c1=on"
+    ensure_boot_line "dtparam=audio=off"
+    ensure_boot_line "dtoverlay=fe-pi-audio"
+    ensure_boot_line "dtoverlay=disable-bt"
+}
 
-# Let's get loud (even without J.Lo)
-set_messages
+amixer_control_exists() {
+    amixer -c Audio scontrols 2>/dev/null | grep -Fq "'${1}'"
+}
 
-# Use commandline option -D for debug
-if [ "$1" = "-D" ]; then
-	IS_DEBUG=true
-fi
+set_optional_amixer_control() {
+    local control=$1
+    local value=$2
+    if amixer_control_exists "${control}"; then
+        amixer -c Audio sset "${control}" "${value}" || \
+            log "Could not set optional ALSA control: ${control}"
+    else
+        log "Optional ALSA control is unavailable: ${control}"
+    fi
+}
 
-# Do some checkup
-check_root
-check_os
-check_filesystem
+set_required_amixer_control() {
+    local control=$1
+    shift
+    if ! amixer_control_exists "${control}"; then
+        log "Required ALSA control is unavailable: ${control}"
+        return 1
+    fi
+    if ! amixer -c Audio sset "${control}" "$@"; then
+        log "Could not set required ALSA control: ${control}"
+        return 1
+    fi
+    log "ALSA control configured: ${control}"
+}
 
-# Update the system
-update_and_prepare
+audio_card_number() {
+    awk '/^[[:space:]]*[0-9]+[[:space:]]+\[Audio\]/{gsub(/^[[:space:]]+/, "", $0); print $1; exit}' /proc/asound/cards 2>/dev/null || true
+}
 
-# We need to start in $HOME
-cd $HOME
+audio_card_available() {
+    [[ -n $(audio_card_number) ]]
+}
 
-if [ ! -f $FLAG ]; then
-	# Installing for the first time.
-	install_firstrun
-	install_svxlink
-	install_sounds
-	setup_svxlink
-	touch $FLAG
-else
-	# Running update
-	install_update
-	install_svxlink
-fi
+configure_elenata_alsa() {
+    local card_number
+    if ! audio_card_available; then
+        log "ALSA card Audio is not available yet; ALSA values will be applied after reboot by rerunning the script."
+        return 0
+    fi
+    card_number=$(audio_card_number)
 
-echo "*** ${msgtext["main_done"]}"
-echo
+    set_required_amixer_control "Capture Mux" "LINE_IN"
+    set_required_amixer_control "Capture" "${CAPTURE_LEFT},${CAPTURE_RIGHT}" unmute
+    set_required_amixer_control "PCM" "166,166"
+    set_required_amixer_control "Lineout" "21,21" unmute
+    set_optional_amixer_control "Capture Attenuate Switch (-6dB)" on
+    set_optional_amixer_control "AVC" off
+    set_optional_amixer_control "AVC Hard Limiter" off
+    set_optional_amixer_control "Mic" 0
+    asactl store "${card_number}" || die "Could not store ALSA state for card ${card_number}."
+}
 
-# *** EOF ***
+set_ini_value() {
+    local file=$1 section=$2 key=$3 value=$4 temporary
+    temporary=$(mktemp)
+    awk -v section="${section}" -v key="${key}" -v value="${value}" '
+        BEGIN { in_section=0; written=0 }
+        $0 == "[" section "]" { in_section=1 }
+        /^\[/ && $0 != "[" section "]" {
+            if (in_section && !written) print key "=" value
+            in_section=0
+        }
+        in_section && $0 ~ "^" key "=" {
+            if (!written) print key "=" value
+            written=1
+            next
+        }
+        { print }
+        END {
+            if (in_section && !written) print key "=" value
+        }
+    ' "${file}" >"${temporary}"
+    install -m 0644 "${temporary}" "${file}"
+    rm -f "${temporary}"
+}
+
+remove_ini_key() {
+    local file=$1 section=$2 key=$3 temporary
+    temporary=$(mktemp)
+    awk -v section="${section}" -v key="${key}" '
+        $0 == "[" section "]" { in_section=1 }
+        /^\[/ && $0 != "[" section "]" { in_section=0 }
+        in_section && $0 ~ "^" key "=" { next }
+        { print }
+    ' "${file}" >"${temporary}"
+    install -m 0644 "${temporary}" "${file}"
+    rm -f "${temporary}"
+}
+
+configure_elenata_svxlink() {
+    [[ -f ${SVXLINK_CONFIG} ]] || { log "SvxLink configuration not found: ${SVXLINK_CONFIG}"; return 0; }
+    if ! grep -Fqx '[Rx1]' "${SVXLINK_CONFIG}" || ! grep -Fqx '[Tx1]' "${SVXLINK_CONFIG}"; then
+        log "Sections [Rx1] and [Tx1] are both required; ELENATA values were not inserted."
+        return 0
+    fi
+    backup_file "${SVXLINK_CONFIG}"
+    remove_ini_key "${SVXLINK_CONFIG}" "Rx1" "PTT_TYPE"
+    remove_ini_key "${SVXLINK_CONFIG}" "Rx1" "PTT_GPIOD_CHIP"
+    remove_ini_key "${SVXLINK_CONFIG}" "Rx1" "PTT_GPIOD_LINE"
+    remove_ini_key "${SVXLINK_CONFIG}" "Tx1" "SQL_DET"
+    remove_ini_key "${SVXLINK_CONFIG}" "Tx1" "SQL_GPIOD_CHIP"
+    remove_ini_key "${SVXLINK_CONFIG}" "Tx1" "SQL_GPIOD_LINE"
+    set_ini_value "${SVXLINK_CONFIG}" "Rx1" "AUDIO_DEV" "alsa:hw:CARD=Audio,DEV=0"
+    set_ini_value "${SVXLINK_CONFIG}" "Rx1" "AUDIO_CHANNEL" "0"
+    set_ini_value "${SVXLINK_CONFIG}" "Rx1" "SQL_DET" "GPIOD"
+    set_ini_value "${SVXLINK_CONFIG}" "Rx1" "SQL_GPIOD_CHIP" "gpiochip0"
+    set_ini_value "${SVXLINK_CONFIG}" "Rx1" "SQL_GPIOD_LINE" "26"
+    set_ini_value "${SVXLINK_CONFIG}" "Tx1" "AUDIO_DEV" "alsa:hw:CARD=Audio,DEV=0"
+    set_ini_value "${SVXLINK_CONFIG}" "Tx1" "AUDIO_CHANNEL" "0"
+    set_ini_value "${SVXLINK_CONFIG}" "Tx1" "PTT_TYPE" "GPIOD"
+    set_ini_value "${SVXLINK_CONFIG}" "Tx1" "PTT_GPIOD_CHIP" "gpiochip0"
+    set_ini_value "${SVXLINK_CONFIG}" "Tx1" "PTT_GPIOD_LINE" "13"
+
+    if ${SECOND_CONNECTOR}; then
+        if grep -Fqx '[Rx2]' "${SVXLINK_CONFIG}" && grep -Fqx '[Tx2]' "${SVXLINK_CONFIG}"; then
+            remove_ini_key "${SVXLINK_CONFIG}" "Rx2" "PTT_TYPE"
+            remove_ini_key "${SVXLINK_CONFIG}" "Rx2" "PTT_GPIOD_CHIP"
+            remove_ini_key "${SVXLINK_CONFIG}" "Rx2" "PTT_GPIOD_LINE"
+            remove_ini_key "${SVXLINK_CONFIG}" "Tx2" "SQL_DET"
+            remove_ini_key "${SVXLINK_CONFIG}" "Tx2" "SQL_GPIOD_CHIP"
+            remove_ini_key "${SVXLINK_CONFIG}" "Tx2" "SQL_GPIOD_LINE"
+            set_ini_value "${SVXLINK_CONFIG}" "Rx2" "AUDIO_DEV" "alsa:hw:CARD=Audio,DEV=0"
+            set_ini_value "${SVXLINK_CONFIG}" "Rx2" "AUDIO_CHANNEL" "1"
+            set_ini_value "${SVXLINK_CONFIG}" "Rx2" "SQL_DET" "GPIOD"
+            set_ini_value "${SVXLINK_CONFIG}" "Rx2" "SQL_GPIOD_CHIP" "gpiochip0"
+            set_ini_value "${SVXLINK_CONFIG}" "Rx2" "SQL_GPIOD_LINE" "6"
+            set_ini_value "${SVXLINK_CONFIG}" "Tx2" "AUDIO_DEV" "alsa:hw:CARD=Audio,DEV=0"
+            set_ini_value "${SVXLINK_CONFIG}" "Tx2" "AUDIO_CHANNEL" "1"
+            set_ini_value "${SVXLINK_CONFIG}" "Tx2" "PTT_TYPE" "GPIOD"
+            set_ini_value "${SVXLINK_CONFIG}" "Tx2" "PTT_GPIOD_CHIP" "gpiochip0"
+            set_ini_value "${SVXLINK_CONFIG}" "Tx2" "PTT_GPIOD_LINE" "5"
+        else
+            log "Second connector requested but sections [Rx2] and [Tx2] are both required."
+        fi
+    fi
+}
+
+configure_callsign() {
+    [[ -f ${SVXLINK_CONFIG} ]] || return 0
+    if ! grep -qE '^[[:space:]]*CALLSIGN=MYCALL[[:space:]]*$' "${SVXLINK_CONFIG}"; then
+        log "CALLSIGN=MYCALL placeholder is unavailable; callsign was not changed."
+        return 0
+    fi
+    backup_file "${SVXLINK_CONFIG}"
+    sed -i -E "0,/^[[:space:]]*CALLSIGN=MYCALL[[:space:]]*$/s//CALLSIGN=${CALLSIGN}/" "${SVXLINK_CONFIG}"
+}
+
+build_svxlink() {
+    if [[ -d ${SOURCE_DIR}/.git ]]; then
+        runuser -u "${INSTALL_USER}" -- git -C "${SOURCE_DIR}" fetch --prune origin
+        runuser -u "${INSTALL_USER}" -- git -C "${SOURCE_DIR}" pull --ff-only
+    elif [[ -e ${SOURCE_DIR} ]]; then
+        die "Source directory exists but is not a SvxLink Git repository: ${SOURCE_DIR}"
+    else
+        runuser -u "${INSTALL_USER}" -- git clone "${SVXLINK_REPOSITORY}" "${SOURCE_DIR}"
+    fi
+
+    BUILD_DIR=$(runuser -u "${INSTALL_USER}" -- mktemp -d "${SOURCE_DIR}/.svxlink-build.XXXXXX")
+    runuser -u "${INSTALL_USER}" -- cmake -S "${SOURCE_DIR}/src" -B "${BUILD_DIR}" \
+        -DUSE_QT=OFF \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DSYSCONF_INSTALL_DIR=/etc \
+        -DLOCAL_STATE_DIR=/var \
+        -DWITH_SYSTEMD=ON
+    runuser -u "${INSTALL_USER}" -- cmake --build "${BUILD_DIR}" --parallel "$(nproc)"
+    cmake --install "${BUILD_DIR}"
+    ldconfig
+}
+
+configure_logging() {
+    touch "${SVXLINK_LOG}"
+    chown "${SVXLINK_USER}:${SVXLINK_GROUP}" "${SVXLINK_LOG}"
+    chmod 0644 "${SVXLINK_LOG}"
+    backup_file "${LOGROTATE_CONFIG}"
+    install -m 0644 /dev/stdin "${LOGROTATE_CONFIG}" <<'EOF'
+/var/log/svxlink {
+    daily
+    rotate 14
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    su svxlink svxlink
+}
+EOF
+    logrotate -d "${LOGROTATE_CONFIG}"
+}
+
+enable_svxlink_service() {
+    systemctl daemon-reload
+    systemctl cat svxlink.service >/dev/null 2>&1 || die "SvxLink systemd service was not installed."
+    systemctl enable svxlink.service
+}
+
+check_item() {
+    local label=$1
+    shift
+    if "$@"; then
+        log "OK: ${label}"
+    else
+        log "MISSING: ${label}"
+    fi
+}
+
+automatic_updates_disabled() {
+    local unit state
+    local -a units=(apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service)
+
+    grep -Fqx 'APT::Periodic::Enable "0";' "${APT_CONFIG}" || return 1
+    for unit in "${units[@]}"; do
+        state=$(systemctl is-enabled "${unit}" 2>/dev/null || true)
+        [[ ${state} != "enabled" ]] || return 1
+    done
+    if dpkg-query -W -f='${db:Status-Status}' unattended-upgrades 2>/dev/null | grep -qx installed; then
+        state=$(systemctl is-enabled unattended-upgrades.service 2>/dev/null || true)
+        [[ ${state} != "enabled" ]] || return 1
+    fi
+}
+
+run_checks() {
+    require_root
+    detect_operating_system
+    log "Operating system: Debian/Raspberry Pi OS ${OS_VERSION}"
+    log "Raspberry Pi detected: ${IS_RASPBERRY_PI}"
+    if ${IS_RASPBERRY_PI}; then
+        log "Boot configuration: ${BOOT_CONFIG}"
+        check_item "Fe-Pi Audio boot overlay" grep -Fqx "dtoverlay=fe-pi-audio" "${BOOT_CONFIG}"
+    fi
+    check_item "ALSA card Audio" audio_card_available
+    check_item "aplay as svxlink" runuser -u "${SVXLINK_USER}" -- aplay -l
+    check_item "arecord as svxlink" runuser -u "${SVXLINK_USER}" -- arecord -l
+    check_item "SvxLink user" id "${SVXLINK_USER}"
+    check_item "SvxLink binary" command -v svxlink
+    check_item "SvxLink service" systemctl is-enabled --quiet svxlink.service
+    check_item "SvxLink log file" test -f "${SVXLINK_LOG}"
+    check_item "Logrotate configuration" logrotate -d "${LOGROTATE_CONFIG}"
+    check_item "Automatic APT updates disabled" automatic_updates_disabled
+    log "Free space: $(df -h / | awk 'NR == 2 {print $4}')"
+    if command -v lsof >/dev/null 2>&1; then
+        if lsof +L1 2>/dev/null | grep -Eq 'svxlink.*(/var/log/svxlink).*\(deleted\)'; then
+            log "MISSING: SvxLink has an open deleted log file."
+        else
+            log "OK: No open deleted SvxLink log file found."
+        fi
+    else
+        log "MISSING: lsof is not installed."
+    fi
+}
+
+main() {
+    if [[ ${1:-} == "--check" ]]; then
+        run_checks
+        return 0
+    fi
+    [[ $# -eq 0 ]] || die "Usage: sudo ./${SCRIPT_NAME} [--check]"
+
+    require_root
+    detect_operating_system
+    log "Detected Debian/Raspberry Pi OS ${OS_VERSION}; Raspberry Pi: ${IS_RASPBERRY_PI}."
+    prompt_callsign
+    choose_hardware_profile
+    install_packages
+    disable_automatic_updates
+    ensure_svxlink_account
+    if [[ ${HARDWARE_PROFILE} == 4 ]]; then
+        configure_elenata_boot
+    fi
+    build_svxlink
+    configure_logging
+    configure_callsign
+    if [[ ${HARDWARE_PROFILE} == 4 ]]; then
+        configure_elenata_svxlink
+        configure_elenata_alsa
+        log "ELENATA boot configuration was prepared. Reboot before putting the station into service."
+    fi
+    log "Standard RepeaterLogic remains active; local extensions stay available in ${SVXLINK_EVENTS_DIR}, ${SVXLINK_EVENTS_LOCAL_DIR} and ${SVXLINK_CONFIG_DIR}."
+    log "German sound resources are expected below ${SVXLINK_SOUNDS_DIR}; no unverified source is downloaded."
+    enable_svxlink_service
+    if [[ ${HARDWARE_PROFILE} == 0 ]]; then
+        log "Base installation completed. Hardware configuration is still required before starting operation."
+    else
+        log "Installation completed. Verify the hardware with sudo ./${SCRIPT_NAME} --check before starting operation."
+    fi
+}
+
+main "$@"
