@@ -465,7 +465,8 @@ automatic_updates_disabled() {
     local unit state
     local -a units=(apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service)
 
-    grep -Fqx 'APT::Periodic::Enable "0";' "${APT_CONFIG}" || return 1
+    [[ -f ${APT_CONFIG} ]] || return 1
+    grep -Fqx 'APT::Periodic::Enable "0";' "${APT_CONFIG}" >/dev/null 2>&1 || return 1
     for unit in "${units[@]}"; do
         state=$(systemctl is-enabled "${unit}" 2>/dev/null || true)
         [[ ${state} != "enabled" ]] || return 1
@@ -474,6 +475,33 @@ automatic_updates_disabled() {
         state=$(systemctl is-enabled unattended-upgrades.service 2>/dev/null || true)
         [[ ${state} != "enabled" ]] || return 1
     fi
+}
+
+elenata_profile_configured() {
+    ${IS_RASPBERRY_PI} && [[ -f ${BOOT_CONFIG} ]] && \
+        grep -Fqx 'dtoverlay=fe-pi-audio' "${BOOT_CONFIG}" >/dev/null 2>&1
+}
+
+check_logrotate_configuration() {
+    local output
+    [[ -f ${LOGROTATE_CONFIG} ]] || { log "MISSING: Logrotate configuration"; return; }
+    if output=$(logrotate -d "${LOGROTATE_CONFIG}" 2>&1); then
+        log "OK: Logrotate configuration"
+    else
+        log "WARN: Logrotate configuration validation failed"
+        printf '%s\n' "${output}" | sed -n '1,3p' | while IFS= read -r line; do
+            log "WARN: logrotate: ${line}"
+        done
+    fi
+}
+
+check_svxlink_user() {
+    getent passwd "${SVXLINK_USER}" >/dev/null 2>&1
+}
+
+check_svxlink_audio_access() {
+    local tool=$1
+    runuser -u "${SVXLINK_USER}" -- "${tool}" -l >/dev/null 2>&1
 }
 
 run_checks() {
@@ -485,15 +513,31 @@ run_checks() {
         log "Boot configuration: ${BOOT_CONFIG}"
         check_item "Fe-Pi Audio boot overlay" grep -Fqx "dtoverlay=fe-pi-audio" "${BOOT_CONFIG}"
     fi
-    check_item "ALSA card Audio" audio_card_available
-    check_item "aplay as svxlink" runuser -u "${SVXLINK_USER}" -- aplay -l
-    check_item "arecord as svxlink" runuser -u "${SVXLINK_USER}" -- arecord -l
-    check_item "SvxLink user" id "${SVXLINK_USER}"
-    check_item "SvxLink binary" command -v svxlink
-    check_item "SvxLink service" systemctl is-enabled --quiet svxlink.service
+    if ! ${IS_RASPBERRY_PI}; then
+        log "SKIP: ELENATA ALSA card check (not a Raspberry Pi)"
+    elif elenata_profile_configured; then
+        check_item "ELENATA ALSA card Audio" audio_card_available
+    else
+        log "INFO: ALSA card Audio not present; ELENATA profile not configured"
+    fi
+    if check_svxlink_user; then
+        log "OK: SvxLink user"
+        check_item "aplay as svxlink" check_svxlink_audio_access aplay
+        check_item "arecord as svxlink" check_svxlink_audio_access arecord
+    else
+        log "MISSING: SvxLink user"
+        log "SKIP: aplay as svxlink (user missing)"
+        log "SKIP: arecord as svxlink (user missing)"
+    fi
+    check_item "SvxLink binary" bash -c 'command -v svxlink >/dev/null 2>&1'
+    check_item "SvxLink service" systemctl is-enabled --quiet svxlink.service 2>/dev/null
     check_item "SvxLink log file" test -f "${SVXLINK_LOG}"
-    check_item "Logrotate configuration" logrotate -d "${LOGROTATE_CONFIG}"
-    check_item "Automatic APT updates disabled" automatic_updates_disabled
+    check_logrotate_configuration
+    if [[ -f ${APT_CONFIG} ]]; then
+        check_item "Automatic APT updates disabled" automatic_updates_disabled
+    else
+        log "MISSING: Automatic APT updates disabled"
+    fi
     log "Free space: $(df -h / | awk 'NR == 2 {print $4}')"
     if command -v lsof >/dev/null 2>&1; then
         if lsof +L1 2>/dev/null | grep -Eq 'svxlink.*(/var/log/svxlink).*\(deleted\)'; then
