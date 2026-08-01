@@ -55,7 +55,7 @@ direct_menu_output=$(printf '9\n' | env SVXLINK_TEST_MODE=true bash "${ROOT}/svx
 [[ ${direct_menu_output} == *'1) Installieren / aktualisieren'* && ${direct_menu_output} != *'Rufzeichen, Relais-'* ]] && pass 'parameterless script entrypoint opens the main menu' || fail 'parameterless script entrypoint opens the main menu'
 submenu_output=$(printf '1\n3\n9\n' | main)
 [[ ${submenu_output} == *'INSTALLIEREN / AKTUALISIEREN'* && ${submenu_output} != *INSTALLATION_CALLED* ]] && pass 'main menu item 1 opens only the installation submenu' || fail 'main menu item 1 opens only the installation submenu'
-start_output=$(printf '1\n1\n3\n9\n' | main)
+start_output=$(printf '1\n1\n9\n' | main)
 [[ ${start_output} == *INSTALLATION_CALLED* ]] && pass 'installation starts only after submenu item 1' || fail 'installation starts only after submenu item 1'
 run_checks() { printf 'CHECK_ACTION_CALLED\n'; }
 check_output=$(main --check)

@@ -26,6 +26,8 @@ if [[ ${SVXLINK_TEST_MODE:-false} == true ]]; then
     gpio_config_path=${GPIO_CONFIG_FILE:-/etc/svxlink/gpio.conf}
     driver_source_path=${DRIVER_SOURCE_DIR:-}
     alsa_state_path=${ALSA_STATE_FILE:-}
+    build_state_path=${SVXLINK_BUILD_STATE_FILE:-/var/lib/svxlink-setup/build-state}
+    install_log_dir_path=${SVXLINK_INSTALL_LOG_DIR:-/var/log/svxlink-setup}
 else
     svxlink_config_path=/etc/svxlink/svxlink.conf
     svxlink_log_path=/var/log/svxlink
@@ -38,6 +40,8 @@ else
     gpio_config_path=/etc/svxlink/gpio.conf
     driver_source_path=""
     alsa_state_path=""
+    build_state_path=/var/lib/svxlink-setup/build-state
+    install_log_dir_path=/var/log/svxlink-setup
 fi
 readonly SVXLINK_REPOSITORY="https://github.com/sm0svx/svxlink.git"
 readonly SVXLINK_USER="svxlink"
@@ -58,6 +62,8 @@ readonly MODULES_FILE="${modules_file_path}"
 readonly SND_CARD_CONFIG_FILE="${modprobe_file_path}"
 readonly RASPI_BLACKLIST_FILE="${raspi_blacklist_path}"
 readonly GPIO_CONFIG_FILE="${gpio_config_path}"
+readonly BUILD_STATE_FILE="${build_state_path}"
+readonly INSTALL_LOG_DIR="${install_log_dir_path}"
 readonly GERMAN_SOUND_ARCHIVE_DEFAULT="${SCRIPT_DIR}/resources/sounds/de_DE-anna-16k.tar.bz2"
 readonly GERMAN_SOUND_SHA256="ec35d15ee3ddb012558c56626f408359db6108c701b2f27c9c3d89309ad78415"
 readonly GERMAN_SOUND_ROOT="de_DE-anna-16k"
@@ -73,6 +79,7 @@ SOURCE_DIR=""
 BUILD_DIR=""
 BOOT_CONFIG=""
 OS_VERSION=""
+OS_ID=""
 IS_RASPBERRY_PI=false
 HARDWARE_PROFILE=0
 SECOND_CONNECTOR=false
@@ -84,6 +91,15 @@ ALSA_STATE_FILE=${alsa_state_path}
 ACTION_YES=false
 CALLSIGN_PROVIDED=false
 HARDWARE_PROFILE_PROVIDED=false
+INSTALL_LOG_FILE=""
+BUILD_PERFORMED=false
+CMAKE_OPTIONS=(
+    -DUSE_QT=OFF
+    -DCMAKE_INSTALL_PREFIX=/usr
+    -DSYSCONF_INSTALL_DIR=/etc
+    -DLOCAL_STATE_DIR=/var
+    -DWITH_SYSTEMD=ON
+)
 
 output_uses_color() {
     [[ -t 1 && ${TERM:-dumb} != dumb && -z ${NO_COLOR:-} ]]
@@ -497,7 +513,7 @@ install_english_sounds() (
     temporary=$(mktemp -d)
     trap 'rm -rf "${temporary}"' EXIT
     archive="${temporary}/svxlink-sounds-en_US-heather-16k-25.05.tar.bz2"
-    if ! curl -fL --proto '=https' --tlsv1.2 --retry 2 --connect-timeout 20 -o "${archive}" "${ENGLISH_SOUND_URL}"; then
+    if ! run_logged 'Englische Sounds werden heruntergeladen' curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 --retry 2 --connect-timeout 20 -o "${archive}" "${ENGLISH_SOUND_URL}"; then
         log "English sound download failed."
         return 1
     fi
@@ -543,6 +559,7 @@ detect_operating_system() {
     fi
     if [[ ${SVXLINK_TEST_MODE:-false} == true && -n ${SVXLINK_TEST_OS_VERSION:-} ]]; then
         OS_VERSION=${SVXLINK_TEST_OS_VERSION}
+        OS_ID=${SVXLINK_TEST_OS_ID:-debian}
         IS_RASPBERRY_PI=false
         return 0
     fi
@@ -550,6 +567,7 @@ detect_operating_system() {
     # shellcheck disable=SC1091
     . /etc/os-release
     OS_VERSION=${VERSION_ID:-}
+    OS_ID=${ID:-}
 
     case ${ID:-} in
         debian|raspbian) ;;
@@ -613,14 +631,14 @@ install_packages() {
         packages+=(i2c-tools)
     fi
 
-    apt-get update
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "${packages[@]}"
+    run_logged 'Paketquellen werden aktualisiert' apt-get update || return 1
+    run_logged 'Grundabhängigkeiten werden installiert' env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "${packages[@]}"
 }
 
 install_packages_for_profile() {
     local package=$1
     if ! dpkg-query -W -f='${db:Status-Status}' "${package}" 2>/dev/null | grep -qx installed; then
-        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "${package}"
+        run_logged "Zusatzpaket ${package} wird installiert" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "${package}"
     fi
 }
 
@@ -1018,26 +1036,145 @@ configure_base_svxlink() {
     validate_base_svxlink_configuration
 }
 
-build_svxlink() {
+start_install_log() {
+    local timestamp
+    [[ -n ${INSTALL_LOG_FILE} ]] && return 0
+    install -d -m 0755 "${INSTALL_LOG_DIR}"
+    timestamp=$(date +%Y%m%d%H%M%S)
+    INSTALL_LOG_FILE="${INSTALL_LOG_DIR}/install-${timestamp}.log"
+    : >"${INSTALL_LOG_FILE}"
+    chmod 0644 "${INSTALL_LOG_FILE}"
+    if [[ ${SVXLINK_TEST_MODE:-false} != true ]]; then chown root:root "${INSTALL_LOG_FILE}"; fi
+}
+
+run_logged() {
+    local label=$1
+    shift
+    start_install_log || return 1
+    print_info "${label} ..."
+    if "$@" >>"${INSTALL_LOG_FILE}" 2>&1; then
+        print_success "${label}"
+        return 0
+    fi
+    print_error "${label} fehlgeschlagen."
+    printf 'Letzte Protokollzeilen:\n'
+    tail -n 30 "${INSTALL_LOG_FILE}" || true
+    printf 'Vollständiges Protokoll: %s\n' "${INSTALL_LOG_FILE}"
+    return 1
+}
+
+build_options_hash() {
+    {
+        printf 'BUILD_TYPE=Release\n'
+        printf 'ARCH=%s\n' "$(uname -m)"
+        printf 'COMPILER=%s\n' "$(g++ --version | head -n 1)"
+        printf '%s\n' "${CMAKE_OPTIONS[@]}"
+    } | sha256sum | awk '{print $1}'
+}
+
+source_commit() { git -C "${SOURCE_DIR}" rev-parse HEAD; }
+source_version() { git -C "${SOURCE_DIR}" describe --tags --exact-match 2>/dev/null || git -C "${SOURCE_DIR}" describe --tags --always; }
+installed_svxlink_version() { svxlink --version 2>/dev/null | awk 'match($0, /[0-9]+\.[0-9]+\.[0-9]+/) { print substr($0, RSTART, RLENGTH); exit }'; }
+
+read_build_state() {
+    local line key value
+    BUILD_STATE_COMMIT=""; BUILD_STATE_VERSION=""; BUILD_STATE_ARCH=""; BUILD_STATE_OS_ID=""; BUILD_STATE_OS_VERSION=""; BUILD_STATE_OPTIONS=""; BUILD_STATE_COMPILER=""; BUILD_STATE_VALID=false
+    [[ -f ${BUILD_STATE_FILE} ]] || return 0
+    while IFS= read -r line || [[ -n ${line} ]]; do
+        [[ ${line} == *=* ]] || continue
+        key=${line%%=*}; value=${line#*=}
+        case ${key} in
+            STATE_VERSION) [[ ${value} == 1 ]] || return 0 ;;
+            SVXLINK_GIT_COMMIT) BUILD_STATE_COMMIT=${value} ;;
+            SVXLINK_VERSION) BUILD_STATE_VERSION=${value} ;;
+            ARCH) BUILD_STATE_ARCH=${value} ;;
+            OS_ID) BUILD_STATE_OS_ID=${value} ;;
+            OS_VERSION_ID) BUILD_STATE_OS_VERSION=${value} ;;
+            COMPILER) BUILD_STATE_COMPILER=${value} ;;
+            CMAKE_OPTIONS_HASH) BUILD_STATE_OPTIONS=${value} ;;
+        esac
+    done <"${BUILD_STATE_FILE}"
+    [[ -n ${BUILD_STATE_COMMIT} && -n ${BUILD_STATE_VERSION} && -n ${BUILD_STATE_ARCH} && -n ${BUILD_STATE_OS_ID} && -n ${BUILD_STATE_OS_VERSION} && -n ${BUILD_STATE_OPTIONS} && -n ${BUILD_STATE_COMPILER} ]] && BUILD_STATE_VALID=true
+}
+
+write_build_state() {
+    local temporary installer_commit
+    install -d -m 0755 "$(dirname "${BUILD_STATE_FILE}")"
+    temporary=$(mktemp "$(dirname "${BUILD_STATE_FILE}")/.build-state.XXXXXX")
+    installer_commit=$(git -C "${SCRIPT_DIR}" rev-parse HEAD 2>/dev/null || printf unknown)
+    cat >"${temporary}" <<EOF
+STATE_VERSION=1
+SVXLINK_GIT_COMMIT=$(source_commit)
+SVXLINK_VERSION=$(source_version)
+ARCH=$(uname -m)
+OS_ID=${OS_ID}
+OS_VERSION_ID=${OS_VERSION}
+BUILD_TYPE=Release
+COMPILER=$(g++ --version | head -n 1)
+CMAKE_OPTIONS_HASH=$(build_options_hash)
+INSTALLER_COMMIT=${installer_commit}
+BUILT_AT=$(date -Iseconds)
+EOF
+    chmod 0644 "${temporary}"
+    if [[ ${SVXLINK_TEST_MODE:-false} != true ]]; then chown root:root "${temporary}"; fi
+    mv -f "${temporary}" "${BUILD_STATE_FILE}"
+}
+
+build_required_reason() {
+    local force=$1 current_commit current_version installed_version options_hash
+    ${force} && { printf 'Erzwungene Neuinstallation'; return 0; }
+    [[ -x $(command -v svxlink 2>/dev/null || true) ]] || { printf 'SvxLink ist noch nicht installiert'; return 0; }
+    current_commit=$(source_commit); current_version=$(source_version); installed_version=$(installed_svxlink_version || true); options_hash=$(build_options_hash)
+    [[ -n ${installed_version} ]] || { printf 'installierte Version kann nicht ermittelt werden'; return 0; }
+    [[ ${installed_version} == "${current_version}" ]] || { printf 'installierte Version stimmt nicht mit dem Quellstand überein'; return 0; }
+    read_build_state
+    ${BUILD_STATE_VALID} || { printf 'Buildstatus fehlt oder ist ungültig'; return 0; }
+    [[ ${BUILD_STATE_COMMIT} == "${current_commit}" ]] || { printf 'Buildstatus gehört zu einem anderen Git-Commit'; return 0; }
+    [[ ${BUILD_STATE_VERSION} == "${current_version}" ]] || { printf 'Buildstatus-Version weicht ab'; return 0; }
+    [[ ${BUILD_STATE_ARCH} == "$(uname -m)" && ${BUILD_STATE_OS_ID} == "${OS_ID}" && ${BUILD_STATE_OS_VERSION} == "${OS_VERSION}" ]] || { printf 'Buildplattform hat sich geändert'; return 0; }
+    [[ ${BUILD_STATE_OPTIONS} == "${options_hash}" ]] || { printf 'Buildparameter haben sich geändert'; return 0; }
+    [[ ${BUILD_STATE_COMPILER} == "$(g++ --version | head -n 1)" ]] || { printf 'Compiler hat sich geändert'; return 0; }
+    return 1
+}
+
+prepare_svxlink_source() {
+    local before after
     if [[ -d ${SOURCE_DIR}/.git ]]; then
-        runuser -u "${INSTALL_USER}" -- git -C "${SOURCE_DIR}" fetch --prune origin
-        runuser -u "${INSTALL_USER}" -- git -C "${SOURCE_DIR}" pull --ff-only
+        before=$(source_commit)
+        run_logged 'SvxLink-Quellstand wird aktualisiert' runuser -u "${INSTALL_USER}" -- git -C "${SOURCE_DIR}" fetch --prune origin || return 1
+        run_logged 'SvxLink-Quellstand wird zusammengeführt' runuser -u "${INSTALL_USER}" -- git -C "${SOURCE_DIR}" pull --ff-only || return 1
+        after=$(source_commit)
+        if [[ ${before} == "${after}" ]]; then
+            print_success 'SvxLink-Quellstand ist unverändert.'
+        else
+            print_info 'Neuer SvxLink-Quellstand erkannt.'
+        fi
     elif [[ -e ${SOURCE_DIR} ]]; then
         die "Source directory exists but is not a SvxLink Git repository: ${SOURCE_DIR}"
     else
-        runuser -u "${INSTALL_USER}" -- git clone "${SVXLINK_REPOSITORY}" "${SOURCE_DIR}"
+        run_logged 'SvxLink-Quellcode wird geladen' runuser -u "${INSTALL_USER}" -- git clone "${SVXLINK_REPOSITORY}" "${SOURCE_DIR}" || return 1
     fi
+}
 
-    BUILD_DIR=$(runuser -u "${INSTALL_USER}" -- mktemp -d "${SOURCE_DIR}/.svxlink-build.XXXXXX")
-    runuser -u "${INSTALL_USER}" -- cmake -S "${SOURCE_DIR}/src" -B "${BUILD_DIR}" \
-        -DUSE_QT=OFF \
-        -DCMAKE_INSTALL_PREFIX=/usr \
-        -DSYSCONF_INSTALL_DIR=/etc \
-        -DLOCAL_STATE_DIR=/var \
-        -DWITH_SYSTEMD=ON
-    runuser -u "${INSTALL_USER}" -- cmake --build "${BUILD_DIR}" --parallel "$(nproc)"
-    cmake --install "${BUILD_DIR}"
-    ldconfig
+build_svxlink() {
+    local force=${1:-false} reason
+    prepare_svxlink_source || return 1
+    if ! reason=$(build_required_reason "${force}"); then
+        print_success "SvxLink $(installed_svxlink_version) ist bereits aktuell."
+        print_info 'Kompilierung und Installation werden übersprungen.'
+        return 0
+    fi
+    print_info "Build erforderlich: ${reason}."
+    BUILD_DIR="${SOURCE_DIR}/build"
+    if ${force} && [[ -d ${BUILD_DIR} && ! -L ${BUILD_DIR} ]]; then
+        rm -rf -- "${BUILD_DIR}"
+    fi
+    [[ ! -L ${BUILD_DIR} ]] || die "Build directory must not be a symbolic link: ${BUILD_DIR}"
+    run_logged 'CMake-Konfiguration wird ausgeführt' runuser -u "${INSTALL_USER}" -- cmake -S "${SOURCE_DIR}/src" -B "${BUILD_DIR}" "${CMAKE_OPTIONS[@]}" || return 1
+    run_logged 'SvxLink wird kompiliert' runuser -u "${INSTALL_USER}" -- cmake --build "${BUILD_DIR}" --parallel "$(nproc)" || return 1
+    run_logged 'SvxLink wird installiert' cmake --install "${BUILD_DIR}" || return 1
+    run_logged 'Linker-Cache wird aktualisiert' ldconfig || return 1
+    BUILD_PERFORMED=true
 }
 
 configure_logging() {
@@ -1172,6 +1309,18 @@ run_checks() {
     fi
     profile=$(detected_hardware_profile)
     print_info "Hardwareprofil: ${profile} – $(hardware_profile_name "${profile}")"
+    printf '\nBuildstatus\n'
+    read_build_state
+    if ${BUILD_STATE_VALID}; then
+        print_success "Letzter erfolgreicher Build: ${BUILD_STATE_VERSION} (${BUILD_STATE_COMMIT:0:12})"
+        if [[ ${BUILD_STATE_ARCH} == "$(uname -m)" && ${BUILD_STATE_OS_ID} == "${OS_ID}" && ${BUILD_STATE_OS_VERSION} == "${OS_VERSION}" && ${BUILD_STATE_OPTIONS} == "$(build_options_hash)" ]]; then
+            print_success 'Buildparameter und Plattform unverändert'
+        else
+            print_warning 'Buildstatus weicht von aktueller Plattform oder Buildparametern ab'
+        fi
+    else
+        print_warning 'Kein verlässlicher Buildstatus vorhanden; beim nächsten Update wird neu gebaut.'
+    fi
     printf '\nSprache\n'
     check_sound_status
     printf '\nBackup und Logs\n'
@@ -1287,6 +1436,9 @@ run_installation() {
     require_root
     detect_operating_system
     log "Detected Debian/Raspberry Pi OS ${OS_VERSION}; Raspberry Pi: ${IS_RASPBERRY_PI}."
+    if ${HARDWARE_PROFILE_PROVIDED} && ! ${IS_RASPBERRY_PI} && [[ ${HARDWARE_PROFILE} != 0 ]]; then
+        die "Hardwareprofil ${HARDWARE_PROFILE} kann nur auf einem erkannten Raspberry Pi verwendet werden."
+    fi
     existing_callsign=""
     [[ -f ${SVXLINK_CONFIG} ]] && existing_callsign=$(ini_value "${SVXLINK_CONFIG}" "RepeaterLogic" "CALLSIGN" || true)
     if ${CALLSIGN_PROVIDED}; then
@@ -1316,10 +1468,13 @@ run_installation() {
     require_base_tools || die "Grundabhängigkeiten fehlen; SvxLink-Build wurde nicht gestartet."
     disable_automatic_updates
     ensure_svxlink_account
-    build_svxlink
+    build_svxlink "$([[ ${mode} == force ]] && printf true || printf false)" || return 1
     configure_logging
     configure_base_svxlink
     configure_hardware_profile
+    if ${BUILD_PERFORMED}; then
+        write_build_state || die 'Buildstatus konnte nicht geschrieben werden.'
+    fi
     if install_german_sounds; then
         GERMAN_SOUNDS_AVAILABLE=true
     else
@@ -1404,7 +1559,7 @@ BACKUP
 3) Vorhandene Backups anzeigen
 4) Zurück
 EOF
-        read -r -p "Auswahl: " choice
+        read -r -p "Auswahl: " choice || return 0
         case ${choice} in
             1) create_full_backup ;;
             2)
@@ -1429,7 +1584,7 @@ EOF
 }
 
 install_menu() {
-    local choice answer
+    local choice answer status
     while :; do
         cat <<'EOF'
 ============================================================
@@ -1440,9 +1595,11 @@ INSTALLIEREN / AKTUALISIEREN
 2) Erzwungene Neuinstallation
 3) Zurück
 EOF
-        read -r -p "Auswahl: " choice
+        read -r -p "Auswahl: " choice || return 0
         case ${choice} in
-            1) run_installation automatic ;;
+            1)
+                if run_installation automatic; then return 0; else return $?; fi
+                ;;
             2)
                 cat <<'EOF'
 Dieser Modus ist für beschädigte oder unvollständige Installationen vorgesehen.
@@ -1455,9 +1612,27 @@ Konfiguration, lokale Events, systemd-Overrides und Soundanpassungen werden
 gesichert und nicht ungefragt gelöscht.
 EOF
                 read -r -p "Erzwungene Neuinstallation starten? [j/N]: " answer
-                [[ ${answer} == j || ${answer} == J ]] || { log "Abgebrochen."; continue; }
+                [[ ${answer} == j || ${answer} == J ]] || { log "Abgebrochen."; return 0; }
+                detect_operating_system
+                if ${IS_RASPBERRY_PI}; then
+                    HARDWARE_PROFILE=$(detected_hardware_profile)
+                    printf 'Erkanntes Hardwareprofil: %s) %s\n\n1) Profil beibehalten\n2) Hardwareprofil neu auswählen\n3) Abbrechen\n' "${HARDWARE_PROFILE}" "$(hardware_profile_name "${HARDWARE_PROFILE}")"
+                    read -r -p "Auswahl: " answer || return 0
+                    case ${answer} in
+                        1) HARDWARE_PROFILE_PROVIDED=true ;;
+                        2) choose_hardware_profile; HARDWARE_PROFILE_PROVIDED=true ;;
+                        3) log "Abgebrochen."; return 0 ;;
+                        *) log "Ungültige Auswahl."; return 0 ;;
+                    esac
+                else
+                    HARDWARE_PROFILE=0
+                    HARDWARE_PROFILE_PROVIDED=true
+                    print_info 'Kein Raspberry Pi erkannt; Force-Modus verwendet Profil 0.'
+                fi
                 create_full_backup
-                run_installation force
+                if run_installation force; then status=0; else status=$?; fi
+                HARDWARE_PROFILE_PROVIDED=false
+                return "${status}"
                 ;;
             3) return 0 ;;
             *) log "Ungültige Auswahl." ;;
@@ -1471,9 +1646,9 @@ run_menu() {
     while :; do
         show_header
         show_menu
-        read -r -p "Auswahl: " choice
+        read -r -p "Auswahl: " choice || return 0
         case ${choice} in
-            1) install_menu ;;
+            1) install_menu || print_error 'Installationsaktion wurde nicht vollständig abgeschlossen.' ;;
             2) run_checks; read -r -p "ENTER zum Hauptmenü ..." _ ;;
             3) backup_menu ;;
             4) install_sound_interactively de_DE || log "German sound installation failed." ;;

@@ -65,6 +65,12 @@
 - Prüft, dass `--check` gezielt ohne Menü ausgeführt wird.
 - Prüft den festen Headerrahmen sowie ANSI-freie Ausgabe mit `NO_COLOR`.
 
+### `tests/simulate_build_decision.sh`
+
+- Prüft fehlenden Buildstatus, passenden Buildstatus, geänderten Git-Commit, geänderte Buildoptionen und Force-Modus.
+- Prüft atomar geschriebenen Buildstatus mit Modus `0644` sowie zeilenweises Einlesen ohne `source`-Ausführung.
+- Der reale Debian-13-VM-Test der Build-Skip-Logik steht noch aus.
+
 ### `tests/simulate_legacy_profiles.sh`
 
 - Zweck: Funktionssimulation der wiederhergestellten historischen Raspberry-Pi-Profile 1 bis 3 ohne Root, Netzwerkzugriff oder echte Systemänderungen.

@@ -16,6 +16,8 @@ The production program requires root privileges and stops before changing the sy
 
 Before a build, the installer installs and verifies required tools including `curl`, `tar`, `bzip2`, checksum, Git and build tools. Status output uses textual status labels; ANSI colors are used only on a terminal and are disabled by `NO_COLOR` and redirected output.
 
+Normal updates use `/var/lib/svxlink-setup/build-state` to compare the source commit, version, platform, compiler and CMake option signature. Matching builds are skipped; forced reinstallations always rebuild. Technical command output is recorded in `/var/log/svxlink-setup/` while the terminal remains concise.
+
 The normal installation installs the official English SvxLink sound release `25.05` and the bundled German Anna 16k archive. The English download uses HTTPS and the fixed SHA-256 `e79e61bec17a24fad093edfb21e7f8ca51af33b9590db954b4789271db2957dd`. German becomes the default language only after its archive has been verified and installed successfully; otherwise English remains active. The Anna archive provenance and checksum are documented in `resources/sounds/de_DE-anna-16k.SOURCE.md`. The project does not claim ownership of its recordings and does not claim that its unresolved licence and redistribution status is free.
 
 Only the selected `de_DE` or `en_US` sound directory is normalized: owner and group `svxlink`, directories `0755`, regular files `0644`. Symbolic-link targets and other local languages are not changed. The same normalization happens before a language is activated.

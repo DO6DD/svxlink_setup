@@ -19,6 +19,7 @@
 - Der Produktivstart verlangt Root über `sudo ./svxlink_setup.sh`; `SVXLINK_TEST_MODE=true` bleibt ohne Root nutzbar.
 - Die Rechteverwaltung für deutsche und englische Sounds normalisiert ausschließlich `de_DE` beziehungsweise `en_US` auf `svxlink:svxlink`, Verzeichnisse `0755` und reguläre Dateien `0644`.
 - Der reale Debian-13-VM-Updatepfad erkannte Rufzeichen und Profil 0 korrekt und baute SvxLink 26.05.1 erneut. Er brach danach wegen der fehlenden `curl`-Abhängigkeit ab; ein Wiederholungstest nach der Korrektur steht aus.
+- Der getestete VM-Lauf erzeugte bei unverändertem Quellstand noch einen vollständigen Neuaufbau. Die neue Build-Skip-Logik mit persistentem Buildstatus ist simuliert geprüft; ein erneuter VM-Test steht aus.
 
 ## Offen
 

@@ -40,3 +40,5 @@
 - `curl`, `tar`, `bzip2` und `gcc` als zentrale Grundabhängigkeiten ergänzt; erforderliche Werkzeuge werden vor Build und Archivverarbeitung kontrolliert geprüft.
 - Englischer Soundfehler meldet jetzt, dass SvxLink bereits aktualisiert sein kann und ein erneuter Update-Lauf erforderlich ist.
 - Headerrahmen, Statuszeilen und Simulationsergebnisse vereinheitlicht; Farben sind terminalgebunden und `NO_COLOR`- beziehungsweise Umleitungsausgaben bleiben ANSI-frei.
+- Persistenten Buildstatus, Buildoptionssignatur, festen Buildpfad und Skip-Entscheidung für unveränderte normale Updates ergänzt; Force bleibt ein vollständiger Neuaufbau.
+- Produktive Paket-, Git-, Build- und Downloadausgaben werden in ein Laufprotokoll umgeleitet; das Terminal zeigt kompakte Phasenmeldungen.
