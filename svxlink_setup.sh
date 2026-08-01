@@ -150,7 +150,10 @@ ensure_svxlink_account() {
     for group in audio dialout plugdev; do
         getent group "${group}" >/dev/null && usermod -a -G "${group}" "${SVXLINK_USER}"
     done
-    ${IS_RASPBERRY_PI} && usermod -a -G gpio "${SVXLINK_USER}"
+    if ${IS_RASPBERRY_PI}; then
+        usermod -a -G gpio "${SVXLINK_USER}"
+    fi
+    return 0
 }
 
 prompt_callsign() {
@@ -188,6 +191,7 @@ choose_hardware_profile() {
         CAPTURE_LEFT=$(prompt_level "Capture-Pegel links" 6)
         CAPTURE_RIGHT=$(prompt_level "Capture-Pegel rechts" 6)
     fi
+    return 0
 }
 
 prompt_level() {
