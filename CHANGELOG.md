@@ -32,3 +32,7 @@
 - Hauptmenü, Installations-/Aktualisierungsuntermenü und Backup-Untermenü ergänzt; alle Profile 0 bis 4 bleiben erreichbar.
 - Simulation `tests/simulate_legacy_profiles.sh` für die historischen Profilzweige, Boot- und Moduleinträge, uSvxCard-GPIO sowie externe Treiberquellen ergänzt.
 - Die historischen Treiberquellen bleiben zunächst unpinned und bis zur Prüfung auf aktueller Raspberry-Pi-Hardware nicht hardwarevalidiert.
+- Produktivstart verbindlich auf Root mit `sudo ./svxlink_setup.sh` festgelegt; Testmodus bleibt rootlos.
+- Quell- und Build-Benutzer werden über `SUDO_USER` und `getent` bestimmt; direkter Root-Login ist definiert.
+- Verzeichnisbackups kopieren statt den Quellordner zu verschieben; ein separater Helfer bleibt für atomaren Austausch zuständig.
+- Deutsche und englische Soundordner werden einzeln auf `svxlink:svxlink`, Verzeichnisse `0755` und reguläre Dateien `0644` normalisiert. Symbolziele werden nicht dereferenziert.

@@ -94,6 +94,10 @@ show_header() {
 | Basierend auf svxlink_setup von DF5KX & DO6NP                |
 | Weiterentwickelt und angepasst von DO6DD                     |
 +---------------------------------------------------------------+
+Dieses Programm muss als root gestartet werden.
+
+Aufruf:
+  sudo ./svxlink_setup.sh
 EOF
 }
 
@@ -114,14 +118,31 @@ on_error() {
 trap on_error ERR
 
 require_root() {
-    [[ ${EUID} -eq 0 ]] || die "Run the script with sudo: sudo ./${SCRIPT_NAME}"
-    [[ -n ${SUDO_USER:-} && ${SUDO_USER} != "root" ]] || die "Run the script through sudo from a regular user account."
+    if [[ ${SVXLINK_TEST_MODE:-false} == true ]]; then
+        return 0
+    fi
+    if [[ ${EUID} -ne 0 ]]; then
+        printf '%s\n' 'FEHLER: Root-Rechte erforderlich.' >&2
+        printf '\n' >&2
+        printf '%s\n' 'Bitte starte das Programm mit:' >&2
+        printf '\n' >&2
+        printf '%s\n' "  sudo ./${SCRIPT_NAME}" >&2
+        exit 1
+    fi
+    [[ -n ${INSTALL_USER} ]] && return 0
+    resolve_install_user
+}
 
-    INSTALL_USER=${SUDO_USER}
+resolve_install_user() {
+    INSTALL_USER=${SUDO_USER:-root}
     INSTALL_HOME=$(getent passwd "${INSTALL_USER}" | cut -d: -f6)
-    [[ -n ${INSTALL_HOME} && ${INSTALL_HOME} != "/root" ]] || die "Could not determine the invoking user's home directory."
+    [[ -n ${INSTALL_HOME} ]] || die "Could not determine the home directory for ${INSTALL_USER}."
+    if [[ ${INSTALL_USER} == root ]]; then
+        log "Direkter Root-Start: Quell- und Arbeitsverzeichnisse werden unter ${INSTALL_HOME} verwendet."
+    fi
     SOURCE_DIR="${INSTALL_HOME}/svxlink"
     BUILD_DIR="${SOURCE_DIR}/src/build"
+    return 0
 }
 
 backup_file() {
@@ -132,6 +153,13 @@ backup_file() {
 }
 
 backup_directory() {
+    local directory=$1
+    [[ -d ${directory} ]] || return 0
+    install -d -m 0750 "${SVXLINK_BACKUP_DIR}"
+    cp -a "${directory}" "${SVXLINK_BACKUP_DIR}/$(basename "${directory}").$(date +%Y%m%d%H%M%S%N).bak"
+}
+
+move_directory_to_backup() {
     local directory=$1
     [[ -d ${directory} ]] || return 0
     install -d -m 0750 "${SVXLINK_BACKUP_DIR}"
@@ -332,13 +360,28 @@ materialize_sound_links() {
     done < <(find "${directory}" -type l -print0)
 }
 
-set_sound_permissions() {
+normalize_sound_permissions() {
     local directory=$1
-    find "${directory}" -type d -exec chmod 0755 {} +
-    find "${directory}" -type f -exec chmod 0644 {} +
-    if [[ ${SVXLINK_TEST_MODE:-false} != true ]]; then
-        chown -R root:root "${directory}"
+    [[ -d ${directory} ]] || { log "Sound directory is missing: ${directory}"; return 1; }
+    if [[ ${SVXLINK_TEST_MODE:-false} == true && ${SVXLINK_TEST_FAIL_SOUND_PERMISSIONS:-false} == true ]]; then
+        log "Sound permission normalization failed in test mode."
+        return 1
     fi
+    if [[ ${SVXLINK_TEST_MODE:-false} != true ]]; then
+        chown -hR "${SVXLINK_USER}:${SVXLINK_GROUP}" "${directory}" || {
+            log "Could not set ownership for sound directory: ${directory}"
+            return 1
+        }
+    fi
+    find "${directory}" -type d -exec chmod 0755 {} + || {
+        log "Could not set directory permissions for: ${directory}"
+        return 1
+    }
+    find "${directory}" -type f -exec chmod 0644 {} + || {
+        log "Could not set file permissions for: ${directory}"
+        return 1
+    }
+    return 0
 }
 
 install_sound_archive() (
@@ -373,10 +416,10 @@ install_sound_archive() (
         return 1
     fi
     materialize_sound_links "${staged}" || return 1
-    set_sound_permissions "${staged}" || return 1
+    normalize_sound_permissions "${staged}" || return 1
     install -d -m 0755 "${SVXLINK_SOUNDS_DIR}"
     if [[ -e ${target} ]]; then
-        backup_directory "${target}" || return 1
+        move_directory_to_backup "${target}" || return 1
     fi
     mv "${staged}" "${target}"
     log "Sound directory installed: ${target}"
@@ -428,6 +471,10 @@ activate_sound_language() {
     fi
     if ! sound_directory_has_wav "${target}"; then
         log "No usable ${language} sound directory was found: ${target}"
+        return 1
+    fi
+    if ! normalize_sound_permissions "${target}"; then
+        log "${language} was not activated because sound permissions could not be normalized."
         return 1
     fi
     if ${interactive}; then
@@ -1389,13 +1436,13 @@ main() {
         esac
     done
     [[ ${action} != --help ]] || { show_help; return 0; }
+    require_root
     case ${action} in
         --menu) run_menu ;;
         --check) run_checks ;;
-        --show-config) require_root; show_configuration ;;
+        --show-config) show_configuration ;;
         --install|--install-german-sounds|--install-english-sounds|--activate-german-sounds|--activate-english-sounds)
             ${ACTION_YES} || die "Non-interactive write actions require --yes."
-            require_root
             case ${action} in
                 --install) run_installation automatic ;;
                 --install-german-sounds) install_german_sounds ;;

@@ -50,6 +50,16 @@
 - Prüft keine Vollständigkeit, Audioheader oder Modulabdeckung deutscher Sounds, entsprechend der vorgesehenen Aktivierungslogik.
 - Die feste englische Quelle ist Release `25.05` von `sm0svx/svxlink-sounds-en_US-heather`, Archiv `svxlink-sounds-en_US-heather-16k-25.05.tar.bz2`, SHA-256 `e79e61bec17a24fad093edfb21e7f8ca51af33b9590db954b4789271db2957dd` und Archivwurzel `en_US-heather-16k/`.
 
+### `tests/simulate_root_backup_permissions.sh`
+
+- Prüft den Produktivstart ohne Root: Exitcode ungleich 0 sowie den Hinweis `sudo ./svxlink_setup.sh`.
+- Prüft Root-Hinweis im Header und die Root-Ausnahme im expliziten Testmodus.
+- Prüft die Ermittlung von `SUDO_USER` und dessen Home über `getent`; ein direkter Root-Login verwendet definiert `root` und `/root`.
+- Prüft, dass das Produktionsskript keine internen `sudo`-Befehle enthält.
+- Prüft, dass `backup_directory` eine Metadaten erhaltende Kopie erzeugt und den Quellordner nicht entfernt.
+- Prüft die Rechte für `de_DE` und `en_US`: Verzeichnisse `0755`, reguläre Dateien `0644`; andere Sprachordner und ein Symbolziel außerhalb des Sprachordners bleiben unverändert.
+- Prüft, dass die Sprachaktivierung Rechte vor `DEFAULT_LANG` normalisiert und bei einem Rechtefehler keine Konfiguration verändert.
+
 ### `tests/simulate_legacy_profiles.sh`
 
 - Zweck: Funktionssimulation der wiederhergestellten historischen Raspberry-Pi-Profile 1 bis 3 ohne Root, Netzwerkzugriff oder echte Systemänderungen.
@@ -108,9 +118,11 @@
 ```bash
 bash -n svxlink_setup.sh
 bash -n tests/simulate_elenata.sh
+shellcheck -x tests/simulate_root_backup_permissions.sh
 shellcheck -x svxlink_setup.sh tests/simulate_elenata.sh
 git diff --check
 tests/simulate_elenata.sh
+tests/simulate_root_backup_permissions.sh
 ```
 
 ## Noch offen

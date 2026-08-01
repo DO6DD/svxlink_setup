@@ -16,6 +16,8 @@
 - Interaktives Startmenü sowie sichere Sprachverwaltung für Deutsch und Englisch sind per isolierter Simulation geprüft.
 - Der deutsche Anna-16k-Sprachsatz ist als geprüftes Archiv eingebettet; seine Lizenz- und Weiterverbreitungsfrage bleibt offen und wird nicht als Freigabe dargestellt.
 - Die historischen Profile 1 (ICS Pi-Repeater), 2 (uSvxCard) und 3 (WM8960 Audio-HAT) sind wieder im Installer auswählbar. `tests/simulate_legacy_profiles.sh` prüft ihre Konfigurationspfade ohne Root und ohne Downloads.
+- Der Produktivstart verlangt Root über `sudo ./svxlink_setup.sh`; `SVXLINK_TEST_MODE=true` bleibt ohne Root nutzbar.
+- Die Rechteverwaltung für deutsche und englische Sounds normalisiert ausschließlich `de_DE` beziehungsweise `en_US` auf `svxlink:svxlink`, Verzeichnisse `0755` und reguläre Dateien `0644`.
 
 ## Offen
 

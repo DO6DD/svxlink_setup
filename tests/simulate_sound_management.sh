@@ -91,6 +91,8 @@ export GERMAN_SOUND_ARCHIVE="${TEMP_DIR}/german.tar.bz2"
 export GERMAN_SOUND_SHA256_OVERRIDE=$(sha256sum "${GERMAN_SOUND_ARCHIVE}" | awk '{print $1}')
 install_german_sounds
 expect_file "${SVXLINK_SOUNDS_DIR}/de_DE/Core/online.wav" 'German installation from mock archive'
+expect_value "$(stat -c '%a' "${SVXLINK_SOUNDS_DIR}/de_DE")" 755 'German sound directory permissions'
+expect_value "$(stat -c '%a' "${SVXLINK_SOUNDS_DIR}/de_DE/Core/online.wav")" 644 'German sound file permissions'
 german_hash=$(find "${SVXLINK_SOUNDS_DIR}/de_DE" -type f -exec sha256sum {} + | sha256sum | awk '{print $1}')
 install_german_sounds
 expect_value "$(find "${SVXLINK_SOUNDS_DIR}/de_DE" -type f -exec sha256sum {} + | sha256sum | awk '{print $1}')" "${german_hash}" 'German installation idempotent'
@@ -122,6 +124,8 @@ export ENGLISH_SOUND_ARCHIVE="${TEMP_DIR}/english.tar.bz2"
 export ENGLISH_SOUND_SHA256_OVERRIDE=$(sha256sum "${ENGLISH_SOUND_ARCHIVE}" | awk '{print $1}')
 install_english_sounds
 expect_file "${SVXLINK_SOUNDS_DIR}/en_US/Core/online.wav" 'English installation from mock archive'
+expect_value "$(stat -c '%a' "${SVXLINK_SOUNDS_DIR}/en_US")" 755 'English sound directory permissions'
+expect_value "$(stat -c '%a' "${SVXLINK_SOUNDS_DIR}/en_US/Core/online.wav")" 644 'English sound file permissions'
 
 if activate_sound_language de_DE false >/dev/null 2>&1; then fail 'missing German language must not activate'; else pass 'missing German language leaves configuration unchanged'; fi
 expect_value "$(ini_value "${SVXLINK_CONFIG}" SimplexLogic DEFAULT_LANG)" en_US 'Simplex remains English when German missing'

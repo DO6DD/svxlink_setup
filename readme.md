@@ -12,7 +12,11 @@ The SvxLink Server is a general purpose voice services system which, when connec
 
 Run `sudo ./svxlink_setup.sh` without parameters to open the interactive menu. It provides installation or update, read-only status, backup management, language installation and activation, and a safe configuration summary. The same actions are available through `--help`; non-interactive write actions require `--yes`.
 
+The production program requires root privileges and stops before changing the system when started without root. `sudo ./svxlink_setup.sh` preserves the invoking user from `SUDO_USER` for source and build directories; a direct root login deliberately uses `/root`. The isolated test mode does not require root.
+
 The normal installation installs the official English SvxLink sound release `25.05` and the bundled German Anna 16k archive. The English download uses HTTPS and the fixed SHA-256 `e79e61bec17a24fad093edfb21e7f8ca51af33b9590db954b4789271db2957dd`. German becomes the default language only after its archive has been verified and installed successfully; otherwise English remains active. The Anna archive provenance and checksum are documented in `resources/sounds/de_DE-anna-16k.SOURCE.md`. The project does not claim ownership of its recordings and does not claim that its unresolved licence and redistribution status is free.
+
+Only the selected `de_DE` or `en_US` sound directory is normalized: owner and group `svxlink`, directories `0755`, regular files `0644`. Symbolic-link targets and other local languages are not changed. The same normalization happens before a language is activated.
 
 The SvxLink setup script arose from the requirement to establish a simple solution for the local NordWestLink network in order to provide all repeaters with the same current version of SvxLink. Chris, DF5KX, wrote the first lines of bash code based on an idea of NJ6N. Nils, DO6NP, added some more lines and that's how the storry goes. :-) The small script has meanwhile become a comprehensive setup solution for SvxLink.
 
@@ -122,6 +126,10 @@ Die Profile 1 bis 3 wurden aus der historischen Installer-Implementierung wieder
 ## Installation
 
 Das Skript geht davon aus, dass wir es mit einem frisch installierten Raspberry Pi oder PC zu tun haben, auf dem das aktuelle Raspbian oder Debian 11 "Bookworm" installiert ist. 
+
+Der Produktivstart benötigt Root-Rechte: `sudo ./svxlink_setup.sh`. Ohne Root bricht das Programm vor Systemänderungen ab. Bei einem Start über `sudo` werden Quell- und Build-Verzeichnisse über `SUDO_USER` im Home des aufrufenden Benutzers angelegt; ein direkter Root-Login verwendet bewusst `/root`. Der isolierte Testmodus benötigt keine Root-Rechte.
+
+Für die Sprachordner `de_DE` und `en_US` werden jeweils nur der gewählte Ordner und dessen reguläre Dateien berechtigt: `svxlink:svxlink`, Verzeichnisse `0755`, reguläre Dateien `0644`. Andere Sprachen und Ziele symbolischer Links bleiben unverändert.
 
 Um das Skript auszuführen, gehe bitte wie folgt vor:
 

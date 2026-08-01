@@ -36,7 +36,8 @@
 
 - Unterstützt werden Debian 12, Debian 13 sowie darauf basierende Raspberry-Pi-OS-Versionen.
 - Raspberry-Pi-Hardwareprofile sind: Profil 0 ohne spezielles Interface, Profil 1 ICS Pi-Repeater, Profil 2 uSvxCard, Profil 3 WM8960 Audio-HAT und Profil 4 ELENATA Wolfson / Fe-Pi Audio. TL5 wird nicht unterstützt.
-- Das Script benötigt `sudo`, erkennt das aufrufende Benutzerkonto über `SUDO_USER` und legt SvxLink-Quellen nicht unter `/root` ab.
+- Das Programm wird produktiv als Root mit `sudo ./svxlink_setup.sh` gestartet; ein unprivilegierter Start bricht vor Systemänderungen mit Exitcode 1 ab. Im Testmodus ist kein Root erforderlich.
+- Für Quellcode und Build-Verzeichnisse wird `SUDO_USER` mit dem über `getent` ermittelten Home-Verzeichnis verwendet. Ein direkter Root-Login verwendet ausdrücklich `/root`.
 - Der Prüfmodus `--check` meldet System-, Dienst-, Log-, Audio- und Update-Status. Hardwareergebnisse bleiben bis zum echten Test nicht hardwarevalidiert.
 - Nicht-Raspberry-Pi-Systeme erhalten automatisch Profil 0; Profil 0 erzeugt keine produktive Audio-, PTT- oder Squelch-Konfiguration.
 - RepeaterLogic ist die aktive Basislogik.
@@ -74,4 +75,4 @@
 - Das alte Script klonte `dl1hrc/svxlink-sounds-de_DE-petra`, verlinkte dessen Verzeichnis als `de_DE` und lud zusätzlich `de_DE-anna-16k.tar.bz2` von `server42.net`.
 - Das Petra-Repository wird nicht automatisch installiert, weil es auf Nutzungsbeschränkungen hinweist.
 - Das eingebettete Anna-Archiv ersetzt den historischen Laufzeitdownload von `server42.net`; die URL bleibt ausschließlich als Herkunftsnachweis erhalten.
-- Die Installation nutzt `/usr/share/svxlink/sounds/de_DE` und `/usr/share/svxlink/sounds/en_US`; Dateien sind `0644`, Verzeichnisse `0755` und der installierte Ressourcenbestand ist `root:root`.
+- Die Installation nutzt `/usr/share/svxlink/sounds/de_DE` und `/usr/share/svxlink/sounds/en_US`. Jeweils nur der gewählte Sprachordner wird rekursiv auf `svxlink:svxlink`, Verzeichnisse auf `0755` und reguläre Dateien auf `0644` normalisiert; Symbolziele werden nicht dereferenziert.
