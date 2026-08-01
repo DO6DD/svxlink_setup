@@ -59,6 +59,8 @@
 - Prüft, dass `backup_directory` eine Metadaten erhaltende Kopie erzeugt und den Quellordner nicht entfernt.
 - Prüft die Rechte für `de_DE` und `en_US`: Verzeichnisse `0755`, reguläre Dateien `0644`; andere Sprachordner und ein Symbolziel außerhalb des Sprachordners bleiben unverändert.
 - Prüft, dass die Sprachaktivierung Rechte vor `DEFAULT_LANG` normalisiert und bei einem Rechtefehler keine Konfiguration verändert.
+- Prüft den parameterlosen Start: Hauptmenü ohne Rufzeichen-, Profil-, Paket- oder Installationsaufruf; Menüpunkt 1 öffnet nur das Untermenü und erst dessen Punkt 1 startet den Installationspfad.
+- Prüft, dass `--check` gezielt ohne Menü ausgeführt wird.
 
 ### `tests/simulate_legacy_profiles.sh`
 

@@ -1404,6 +1404,10 @@ run_menu() {
     done
 }
 
+main_menu() {
+    run_menu
+}
+
 show_help() {
     cat <<EOF
 Usage: sudo ./${SCRIPT_NAME} [--menu|--install|--check|--install-german-sounds|--install-english-sounds|--activate-german-sounds|--activate-english-sounds|--show-config] [--callsign=<name>] [--profile=0..4] [--yes]
@@ -1413,7 +1417,12 @@ EOF
 }
 
 main() {
-    local action=--menu argument
+    local action="" argument
+    if (( $# == 0 )); then
+        require_root
+        main_menu
+        return 0
+    fi
     for argument in "$@"; do
         case ${argument} in
             --yes) ACTION_YES=true ;;
@@ -1429,16 +1438,17 @@ main() {
                 HARDWARE_PROFILE_PROVIDED=true
                 ;;
             --menu|--install|--check|--install-german-sounds|--install-english-sounds|--activate-german-sounds|--activate-english-sounds|--show-config|--help)
-                [[ ${action} == --menu ]] || die "Only one action parameter is allowed."
+                [[ -z ${action} ]] || die "Only one action parameter is allowed."
                 action=${argument}
                 ;;
             *) die "Unknown parameter: ${argument}. Use --help." ;;
         esac
     done
+    [[ -n ${action} ]] || die "An action parameter is required when options are supplied. Use --help."
     [[ ${action} != --help ]] || { show_help; return 0; }
     require_root
     case ${action} in
-        --menu) run_menu ;;
+        --menu) main_menu ;;
         --check) run_checks ;;
         --show-config) show_configuration ;;
         --install|--install-german-sounds|--install-english-sounds|--activate-german-sounds|--activate-english-sounds)

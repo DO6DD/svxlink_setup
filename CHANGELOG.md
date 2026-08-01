@@ -36,3 +36,4 @@
 - Quell- und Build-Benutzer werden über `SUDO_USER` und `getent` bestimmt; direkter Root-Login ist definiert.
 - Verzeichnisbackups kopieren statt den Quellordner zu verschieben; ein separater Helfer bleibt für atomaren Austausch zuständig.
 - Deutsche und englische Soundordner werden einzeln auf `svxlink:svxlink`, Verzeichnisse `0755` und reguläre Dateien `0644` normalisiert. Symbolziele werden nicht dereferenziert.
+- Parameterloser Programmstart öffnet verbindlich `main_menu`; Systemerkennung und Installation sind erst über Installations-Untermenüpunkt 1 erreichbar.

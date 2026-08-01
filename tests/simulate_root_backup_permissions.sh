@@ -23,6 +23,9 @@ expect() { [[ $1 == "$2" ]] && pass "$3" || fail "$3 (expected ${2}, got ${1})";
 source "${ROOT}/svxlink_setup.sh"
 trap - ERR
 
+run_installation() { printf 'INSTALLATION_CALLED\n'; }
+install_packages() { printf 'PACKAGE_COMMAND_CALLED\n'; }
+
 nonroot_output="${TEMP_DIR}/nonroot.out"
 if env -u SVXLINK_TEST_MODE bash "${ROOT}/svxlink_setup.sh" --show-config >"${nonroot_output}" 2>&1; then
     fail 'production start without root must fail'
@@ -35,6 +38,19 @@ grep -Fqx '  sudo ./svxlink_setup.sh' "${nonroot_output}" && pass 'root error na
 header=$(show_header)
 [[ ${header} == *'Dieses Programm muss als root gestartet werden.'* && ${header} == *'sudo ./svxlink_setup.sh'* ]] && pass 'root hint is visible in header' || fail 'root hint is visible in header'
 require_root && pass 'test mode bypasses root requirement' || fail 'test mode bypasses root requirement'
+
+menu_output=$(printf '9\n' | main)
+[[ ${menu_output} == *'1) Installieren / aktualisieren'* && ${menu_output} == *'9) Beenden'* ]] && pass 'parameterless main opens the main menu' || fail 'parameterless main opens the main menu'
+[[ ${menu_output} != *INSTALLATION_CALLED* && ${menu_output} != *PACKAGE_COMMAND_CALLED* && ${menu_output} != *'Rufzeichen, Relais-'* && ${menu_output} != *'Kein Raspberry Pi erkannt.'* ]] && pass 'no installation action occurs before menu selection' || fail 'no installation action occurs before menu selection'
+direct_menu_output=$(printf '9\n' | env SVXLINK_TEST_MODE=true bash "${ROOT}/svxlink_setup.sh")
+[[ ${direct_menu_output} == *'1) Installieren / aktualisieren'* && ${direct_menu_output} != *'Rufzeichen, Relais-'* ]] && pass 'parameterless script entrypoint opens the main menu' || fail 'parameterless script entrypoint opens the main menu'
+submenu_output=$(printf '1\n3\n9\n' | main)
+[[ ${submenu_output} == *'INSTALLIEREN / AKTUALISIEREN'* && ${submenu_output} != *INSTALLATION_CALLED* ]] && pass 'main menu item 1 opens only the installation submenu' || fail 'main menu item 1 opens only the installation submenu'
+start_output=$(printf '1\n1\n3\n9\n' | main)
+[[ ${start_output} == *INSTALLATION_CALLED* ]] && pass 'installation starts only after submenu item 1' || fail 'installation starts only after submenu item 1'
+run_checks() { printf 'CHECK_ACTION_CALLED\n'; }
+check_output=$(main --check)
+[[ ${check_output} == *CHECK_ACTION_CALLED* && ${check_output} != *'1) Installieren / aktualisieren'* ]] && pass 'non-interactive check bypasses menu' || fail 'non-interactive check bypasses menu'
 
 getent() {
     case $2 in
