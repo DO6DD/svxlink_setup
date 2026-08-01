@@ -4,17 +4,31 @@
 set -Eeuo pipefail
 
 readonly SCRIPT_NAME=${0##*/}
+if [[ ${SVXLINK_TEST_MODE:-false} == true ]]; then
+    svxlink_config_path=${SVXLINK_CONFIG_FILE:-/etc/svxlink/svxlink.conf}
+    svxlink_log_path=${LOG_FILE:-/var/log/svxlink}
+    svxlink_logrotate_path=${LOGROTATE_FILE:-/etc/logrotate.d/svxlink}
+    svxlink_backup_path=${SVXLINK_BACKUP_DIR:-/var/backups/svxlink-setup}
+    alsa_state_path=${ALSA_STATE_FILE:-}
+else
+    svxlink_config_path=/etc/svxlink/svxlink.conf
+    svxlink_log_path=/var/log/svxlink
+    svxlink_logrotate_path=/etc/logrotate.d/svxlink
+    svxlink_backup_path=/var/backups/svxlink-setup
+    alsa_state_path=""
+fi
 readonly SVXLINK_REPOSITORY="https://github.com/sm0svx/svxlink.git"
 readonly SVXLINK_USER="svxlink"
 readonly SVXLINK_GROUP="svxlink"
-readonly SVXLINK_CONFIG="/etc/svxlink/svxlink.conf"
+readonly SVXLINK_CONFIG="${svxlink_config_path}"
 readonly SVXLINK_CONFIG_DIR="/etc/svxlink/svxlink.d"
 readonly SVXLINK_EVENTS_DIR="/usr/share/svxlink/events.d"
 readonly SVXLINK_EVENTS_LOCAL_DIR="/usr/share/svxlink/events.d/local"
 readonly SVXLINK_SOUNDS_DIR="/usr/share/svxlink/sounds"
-readonly SVXLINK_LOG="/var/log/svxlink"
+readonly SVXLINK_LOG="${svxlink_log_path}"
 readonly APT_CONFIG="/etc/apt/apt.conf.d/20svxlink-disable-auto-updates"
-readonly LOGROTATE_CONFIG="/etc/logrotate.d/svxlink"
+readonly LOGROTATE_CONFIG="${svxlink_logrotate_path}"
+readonly SVXLINK_BACKUP_DIR="${svxlink_backup_path}"
 
 INSTALL_USER=""
 INSTALL_HOME=""
@@ -29,6 +43,7 @@ CALLSIGN=""
 CAPTURE_LEFT=6
 CAPTURE_RIGHT=6
 GERMAN_SOUNDS_AVAILABLE=false
+ALSA_STATE_FILE=${alsa_state_path}
 
 log() {
     printf '%s: %s\n' "${SCRIPT_NAME}" "$*"
@@ -59,14 +74,17 @@ require_root() {
 
 backup_file() {
     local file=$1
-    local backup_dir=/var/backups/svxlink-setup
-
     [[ -e ${file} ]] || return 0
-    install -d -m 0750 "${backup_dir}"
-    cp -a "${file}" "${backup_dir}/$(basename "${file}").$(date +%Y%m%d%H%M%S%N).bak"
+    install -d -m 0750 "${SVXLINK_BACKUP_DIR}"
+    cp -a "${file}" "${SVXLINK_BACKUP_DIR}/$(basename "${file}").$(date +%Y%m%d%H%M%S%N).bak"
 }
 
 detect_operating_system() {
+    if [[ ${SVXLINK_TEST_MODE:-false} == true && ${SVXLINK_TEST_RASPBERRY_PI:-false} == true ]]; then
+        IS_RASPBERRY_PI=true
+        BOOT_CONFIG=${BOOT_CONFIG_FILE:?BOOT_CONFIG_FILE is required in test mode}
+        return 0
+    fi
     [[ -r /etc/os-release ]] || die "Missing /etc/os-release."
     # shellcheck disable=SC1091
     . /etc/os-release
@@ -246,21 +264,54 @@ ensure_boot_line() {
             }
             { print }
         ' "${BOOT_CONFIG}" >"${temporary}"
-        install -m 0644 "${temporary}" "${BOOT_CONFIG}"
-        rm -f "${temporary}"
+        install -m 0644 "${temporary}" "${BOOT_CONFIG}" || { rm -f "${temporary}"; return 1; }
+        rm -f "${temporary}" || return 1
     else
-        printf '\n%s\n' "${line}" >>"${BOOT_CONFIG}"
+        printf '\n%s\n' "${line}" >>"${BOOT_CONFIG}" || return 1
     fi
 }
 
+boot_line_needs_update() {
+    local line=$1
+    local key active_pattern active_count
+
+    case ${line} in
+        dtparam=*)
+            key="dtparam=${line#dtparam=}"
+            key=${key%=*}
+            active_pattern="^[[:space:]]*${key//./\\.}="
+            ;;
+        dtoverlay=*)
+            key="dtoverlay=${line#dtoverlay=}"
+            active_pattern="^[[:space:]]*${key//./\\.}([[:space:]]*$|,)"
+            ;;
+        *) die "Unsupported boot setting: ${line}" ;;
+    esac
+    active_count=$(grep -cE "${active_pattern}" "${BOOT_CONFIG}" || true)
+    [[ ${active_count} == 1 ]] && grep -qE "^[[:space:]]*${line//./\\.}[[:space:]]*$" "${BOOT_CONFIG}"
+}
+
 configure_elenata_boot() {
+    local line
+    local -a required_lines=(
+        "dtparam=i2c0=on"
+        "dtparam=i2c1=on"
+        "dtparam=audio=off"
+        "dtoverlay=fe-pi-audio"
+        "dtoverlay=disable-bt"
+    )
+
     ${IS_RASPBERRY_PI} || die "ELENATA is only supported on a Raspberry Pi."
-    backup_file "${BOOT_CONFIG}"
-    ensure_boot_line "dtparam=i2c0=on"
-    ensure_boot_line "dtparam=i2c1=on"
-    ensure_boot_line "dtparam=audio=off"
-    ensure_boot_line "dtoverlay=fe-pi-audio"
-    ensure_boot_line "dtoverlay=disable-bt"
+    for line in "${required_lines[@]}"; do
+        if ! boot_line_needs_update "${line}"; then
+            backup_file "${BOOT_CONFIG}"
+            break
+        fi
+    done
+    for line in "${required_lines[@]}"; do
+        ensure_boot_line "${line}" || return 1
+    done
+    return 0
 }
 
 amixer_control_exists() {
@@ -308,15 +359,19 @@ configure_elenata_alsa() {
     fi
     card_number=$(audio_card_number)
 
-    set_required_amixer_control "Capture Mux" "LINE_IN"
-    set_required_amixer_control "Capture" "${CAPTURE_LEFT},${CAPTURE_RIGHT}" unmute
-    set_required_amixer_control "PCM" "166,166"
-    set_required_amixer_control "Lineout" "21,21" unmute
+    set_required_amixer_control "Capture Mux" "LINE_IN" || return 1
+    set_required_amixer_control "Capture" "${CAPTURE_LEFT},${CAPTURE_RIGHT}" unmute || return 1
+    set_required_amixer_control "PCM" "166,166" || return 1
+    set_required_amixer_control "Lineout" "21,21" unmute || return 1
     set_optional_amixer_control "Capture Attenuate Switch (-6dB)" on
     set_optional_amixer_control "AVC" off
     set_optional_amixer_control "AVC Hard Limiter" off
     set_optional_amixer_control "Mic" 0
-    asactl store "${card_number}" || die "Could not store ALSA state for card ${card_number}."
+    if [[ -n ${ALSA_STATE_FILE} ]]; then
+        asactl store -f "${ALSA_STATE_FILE}" "${card_number}" || die "Could not store ALSA state for card ${card_number}."
+    else
+        asactl store "${card_number}" || die "Could not store ALSA state for card ${card_number}."
+    fi
 }
 
 set_ini_value() {
@@ -649,4 +704,6 @@ main() {
     fi
 }
 
-main "$@"
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
+    main "$@"
+fi

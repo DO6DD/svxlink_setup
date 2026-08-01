@@ -42,6 +42,17 @@
 - RepeaterLogic ist die aktive Basislogik.
 - Ohne fertig konfigurierte Hardware wird der Dienst nicht automatisch produktiv gestartet.
 
+## Testbarkeit und Hardwareprofile
+
+- Hardwareprofile müssen ohne echte Hardware soweit möglich über isolierte Funktionstests prüfbar sein.
+- Testpfade dürfen Produktionspfade nur bei explizitem `SVXLINK_TEST_MODE=true` überschreiben; ohne Testmodus gelten feste Produktionspfade.
+- Simulierte Raspberry-Pi-Erkennung darf nur durch klar begrenzte Testvariablen aktiviert werden.
+- Simulationstests dürfen kein Root benötigen und keine echten Dateien unter `/boot`, `/etc`, `/usr` oder `/var` verändern.
+- Vor und nach dem Test müssen relevante echte Dateien auf Inhalt und Metadaten geprüft werden.
+- Idempotenz muss für Boot- und SvxLink-Konfiguration geprüft werden.
+- Mock-Aufrufe müssen protokolliert und relevante Aufrufe inhaltlich geprüft werden. Nicht aufgerufene Mocks dürfen nicht als getestete Funktion behauptet werden.
+- Simulation und Hardwarevalidierung müssen in Status und Testdokumentation klar getrennt werden. Ein bestandener Simulationstest darf niemals als Hardwarefreigabe bezeichnet werden.
+
 ## Deutsche Sounds und RepeaterLogic
 
 - Deutsche Sounds sind allgemeine Sprachressourcen der Standardinstallation. Quelle, Lizenz, Verzeichnisstruktur und Aktualisierbarkeit müssen vor einer automatischen Installation geprüft sein.

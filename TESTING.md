@@ -39,6 +39,56 @@
 - Account-Setup für Raspberry Pi und Nicht-Raspberry-Pi.
 - Nicht-Pi-Profil 0.
 
+### `tests/simulate_elenata.sh`
+
+- Zweck: sichere Funktionssimulation der Profil-4-Komponenten ohne Root. Der Test ist kein vollständiger Root-Installationslauf und keine Hardwarevalidierung.
+- Der Test arbeitet ausschließlich in einem mit `mktemp -d` erzeugten Verzeichnis und entfernt dieses per `trap`.
+- Produktionspfade sind nur mit `SVXLINK_TEST_MODE=true` überschreibbar. Ohne Testmodus gelten die festen Produktionspfade.
+- Die Raspberry-Pi-Simulation ist nur mit `SVXLINK_TEST_MODE=true` und `SVXLINK_TEST_RASPBERRY_PI=true` aktiv.
+- Das Produktionsskript wird über einen `BASH_SOURCE`-Guard sicher eingebunden; seine direkte Ausführung bleibt unverändert.
+
+#### Bootkonfiguration
+
+- Prüft `dtparam=i2c0=on`, `dtparam=i2c1=on`, `dtparam=audio=off`, `dtoverlay=fe-pi-audio` und `dtoverlay=disable-bt`.
+- Fremde aktive und kommentierte Zeilen bleiben erhalten.
+- Der zweite Lauf ist byte-identisch und erzeugt keine zweite Sicherung ohne Änderungsbedarf.
+- Eine nicht beschreibbare temporäre Bootdatei erzeugt einen kontrollierten Fehler.
+
+#### Profil-4-Konfiguration
+
+| Abschnitt | Werte |
+| --- | --- |
+| `Rx1` | `AUDIO_DEV=alsa:hw:CARD=Audio,DEV=0`, `AUDIO_CHANNEL=0`, `SQL_DET=GPIOD`, `SQL_GPIOD_CHIP=gpiochip0`, `SQL_GPIOD_LINE=26` |
+| `Tx1` | `AUDIO_DEV=alsa:hw:CARD=Audio,DEV=0`, `AUDIO_CHANNEL=0`, `PTT_TYPE=GPIOD`, `PTT_GPIOD_CHIP=gpiochip0`, `PTT_GPIOD_LINE=13` |
+| `Rx2` | `AUDIO_DEV=alsa:hw:CARD=Audio,DEV=0`, `AUDIO_CHANNEL=1`, `SQL_DET=GPIOD`, `SQL_GPIOD_CHIP=gpiochip0`, `SQL_GPIOD_LINE=6` |
+| `Tx2` | `AUDIO_DEV=alsa:hw:CARD=Audio,DEV=0`, `AUDIO_CHANNEL=1`, `PTT_TYPE=GPIOD`, `PTT_GPIOD_CHIP=gpiochip0`, `PTT_GPIOD_LINE=5` |
+
+- Prüft `GLOBAL/LOGICS=RepeaterLogic` und `CALLSIGN` in `RepeaterLogic`.
+- Prüft keine PTT-Schlüssel in `Rx1` und `Rx2`, keine SQL-Schlüssel in `Tx1` und `Tx2` sowie keine doppelten Schlüssel in `GLOBAL`, `RepeaterLogic`, `Rx1`, `Tx1`, `Rx2` und `Tx2`.
+- Der erste und zweite Anschluss sind jeweils idempotent.
+
+#### ALSA-Simulation
+
+- Simuliert die Karte `Audio` und prüft die Verwendung der über `audio_card_number` ermittelten Kartennummer `2`.
+- Prüft vollständig: `amixer -c Audio sset "Capture Mux" LINE_IN`, `amixer -c Audio sset Capture 6,6 unmute`, `amixer -c Audio sset Capture 8,5 unmute`, `amixer -c Audio sset "Capture Attenuate Switch (-6dB)" on`, `amixer -c Audio sset PCM 166,166`, `amixer -c Audio sset Lineout 21,21 unmute`, `amixer -c Audio sset AVC off`, `amixer -c Audio sset "AVC Hard Limiter" off` und `amixer -c Audio sset Mic 0`.
+- Prüft `asactl store -f <temporäre-state-datei> 2` sowie das Anlegen der temporären ALSA-State-Datei.
+
+#### Fehler- und Sicherheitsfälle
+
+- Prüft fehlende Karte `Audio`, fehlenden Pflichtregler, fehlenden optionalen Regler, ungültigen Capture-Wert, nicht beschreibbare temporäre Bootdatei und fehlende `RepeaterLogic`-Sektion.
+- Vor und nach dem Test werden SHA-256, Dateityp, Modus, UID, GID, Größe und Änderungszeit von `/boot/config.txt`, `/boot/firmware/config.txt`, `/etc/svxlink/svxlink.conf`, `/etc/default/svxlink` und `/etc/logrotate.d/svxlink` verglichen.
+- Mock-Aufrufe werden protokolliert. Im aktuellen Komponententest werden `amixer`, `asactl`, `chown`, `chmod` und `logrotate` aufgerufen; `aplay`, `arecord`, `systemctl`, `usermod` und `getent` werden nicht aufgerufen und gelten daher nicht als getestet.
+
+#### Validierung
+
+```bash
+bash -n svxlink_setup.sh
+bash -n tests/simulate_elenata.sh
+shellcheck -x svxlink_setup.sh tests/simulate_elenata.sh
+git diff --check
+tests/simulate_elenata.sh
+```
+
 ## Noch offen
 
 - Echter Debian-12-VM-Test.
