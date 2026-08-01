@@ -166,7 +166,13 @@ prompt_callsign() {
 }
 
 choose_hardware_profile() {
-    ${IS_RASPBERRY_PI} || return 0
+    if ! ${IS_RASPBERRY_PI}; then
+        HARDWARE_PROFILE=0
+        log "Kein Raspberry Pi erkannt."
+        log "Hardwareprofil automatisch auf 0 gesetzt:"
+        log "Kein Raspberry-Pi-Audioprofil."
+        return 0
+    fi
 
     log "Hardwareprofil auswählen:"
     log "  0) Kein Raspberry-Pi-Audioprofil"
