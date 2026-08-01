@@ -373,7 +373,7 @@ configure_hardware_profile() {
 
 sound_directory_has_wav() {
     local directory=$1
-    [[ -d ${directory} ]] && find "${directory}" -type f -name '*.wav' -print -quit 2>/dev/null | grep -q .
+    [[ -d ${directory} ]] && find "${directory}" -type f -name '*.wav' -size +0c -print -quit 2>/dev/null | grep -q .
 }
 
 sound_wav_count() {
@@ -384,17 +384,17 @@ sound_wav_count() {
 
 sound_archive_is_safe() {
     local archive=$1 expected_root=$2 entry type listing link_target
-    tar -tjf "${archive}" >/dev/null 2>&1 || { log "Sound archive cannot be listed: ${archive}"; return 1; }
+    tar -tjf "${archive}" >/dev/null 2>&1 || { log "Soundarchiv kann nicht gelesen werden: ${archive}"; return 1; }
 
     while IFS= read -r entry; do
         [[ ${entry} == "${expected_root}/"* || ${entry} == "${expected_root}" ]] || {
-            log "Sound archive contains an unexpected path: ${entry}"; return 1;
+            log "Soundarchiv enthält einen unerwarteten Pfad: ${entry}"; return 1;
         }
         [[ ${entry} != /* && ${entry} != *'../'* && ${entry} != '..' ]] || {
-            log "Sound archive contains an unsafe path: ${entry}"; return 1;
+            log "Soundarchiv enthält einen unsicheren Pfad: ${entry}"; return 1;
         }
         [[ ${entry} != *'/.svn/'* && ${entry} != */.svn && ${entry} != *.tcl ]] || {
-            log "Sound archive contains a forbidden entry: ${entry}"; return 1;
+            log "Soundarchiv enthält einen unzulässigen Eintrag: ${entry}"; return 1;
         }
     done < <(tar -tjf "${archive}")
 
@@ -403,12 +403,12 @@ sound_archive_is_safe() {
         if [[ ${type} == l ]]; then
             link_target=${listing##* -> }
             [[ ${link_target} != /* ]] || {
-                log "Sound archive contains an unsafe symbolic link: ${listing}"; return 1;
+                log "Soundarchiv enthält einen unsicheren symbolischen Link: ${listing}"; return 1;
             }
             continue
         fi
         [[ ${type} == '-' || ${type} == 'd' ]] || {
-            log "Sound archive contains an unsupported entry type: ${listing}"; return 1;
+            log "Soundarchiv enthält einen nicht unterstützten Eintragstyp: ${listing}"; return 1;
         }
     done < <(tar -tvjf "${archive}")
     return 0
@@ -419,7 +419,7 @@ materialize_sound_links() {
     while IFS= read -r -d '' link; do
         resolved=$(readlink -f -- "${link}") || { log "Broken sound link: ${link}"; return 1; }
         [[ ${resolved} == "${directory}/"* && -f ${resolved} ]] || {
-            log "Sound link escapes the extracted archive: ${link}"; return 1;
+            log "Soundlink verweist außerhalb des entpackten Archivs: ${link}"; return 1;
         }
         replacement="${link}.svxlink-materialized"
         cp --dereference --preserve=mode -- "${link}" "${replacement}" || return 1
@@ -429,60 +429,69 @@ materialize_sound_links() {
 
 normalize_sound_permissions() {
     local directory=$1
-    [[ -d ${directory} ]] || { log "Sound directory is missing: ${directory}"; return 1; }
+    [[ -d ${directory} ]] || { log "Soundverzeichnis fehlt: ${directory}"; return 1; }
     if [[ ${SVXLINK_TEST_MODE:-false} == true && ${SVXLINK_TEST_FAIL_SOUND_PERMISSIONS:-false} == true ]]; then
         log "Sound permission normalization failed in test mode."
         return 1
     fi
     if [[ ${SVXLINK_TEST_MODE:-false} != true ]]; then
-        chown -hR "${SVXLINK_USER}:${SVXLINK_GROUP}" "${directory}" || {
-            log "Could not set ownership for sound directory: ${directory}"
+        find "${directory}" \( -type d -o -type f \) \( ! -user "${SVXLINK_USER}" -o ! -group "${SVXLINK_GROUP}" \) -exec chown "${SVXLINK_USER}:${SVXLINK_GROUP}" {} + || {
+            log "Besitzer des Soundverzeichnisses konnten nicht gesetzt werden: ${directory}"
             return 1
         }
     fi
-    find "${directory}" -type d -exec chmod 0755 {} + || {
-        log "Could not set directory permissions for: ${directory}"
+    find "${directory}" -type d ! -perm 0755 -exec chmod 0755 {} + || {
+        log "Verzeichnisrechte konnten nicht gesetzt werden: ${directory}"
         return 1
     }
-    find "${directory}" -type f -exec chmod 0644 {} + || {
-        log "Could not set file permissions for: ${directory}"
+    find "${directory}" -type f ! -perm 0644 -exec chmod 0644 {} + || {
+        log "Dateirechte konnten nicht gesetzt werden: ${directory}"
         return 1
     }
+    return 0
+}
+
+sound_package_already_present() {
+    local language=$1 label=$2 target
+    target="${SVXLINK_SOUNDS_DIR}/${language}"
+    sound_directory_has_wav "${target}" || return 1
+    normalize_sound_permissions "${target}" || return 1
+    print_success "${label} Sounds sind bereits vorhanden."
+    [[ ${language} != en_US ]] || print_info 'Download wird übersprungen.'
     return 0
 }
 
 install_sound_archive() (
     local archive=$1 expected_sha=$2 expected_root=$3 language=$4 replace_existing=${5:-false}
     local actual_sha temporary staged target
+    target="${SVXLINK_SOUNDS_DIR}/${language}"
+    if sound_package_already_present "${language}" "$([[ ${language} == de_DE ]] && printf Deutsche || printf Englische)"; then
+        return 0
+    fi
     require_command tar || return 1
     require_command bzip2 || return 1
     require_command sha256sum || return 1
-    target="${SVXLINK_SOUNDS_DIR}/${language}"
-    [[ -f ${archive} ]] || { log "Sound archive is missing: ${archive}"; return 1; }
+    [[ -f ${archive} ]] || { log "Soundarchiv fehlt: ${archive}"; return 1; }
     actual_sha=$(sha256sum "${archive}" | awk '{print $1}')
     [[ ${actual_sha} == "${expected_sha}" ]] || {
-        log "Sound archive checksum verification failed: ${archive}"; return 1;
+        log "Prüfsummenprüfung des Soundarchivs fehlgeschlagen: ${archive}"; return 1;
     }
     sound_archive_is_safe "${archive}" "${expected_root}" || return 1
 
-    if sound_directory_has_wav "${target}"; then
-        log "Sound directory already exists and contains WAV files: ${target}"
-        return 0
-    fi
     if [[ -e ${target} && ${replace_existing} != true ]]; then
-        log "Sound directory exists but is not a usable managed sound set: ${target}"
+        log "Soundverzeichnis ist vorhanden, enthält aber keine nutzbaren WAV-Dateien: ${target}"
         return 1
     fi
 
     temporary=$(mktemp -d)
     trap 'rm -rf "${temporary}"' EXIT
     if ! tar -xjf "${archive}" -C "${temporary}" --no-same-owner --no-same-permissions; then
-        log "Sound archive extraction failed: ${archive}"
+        log "Entpacken des Soundarchivs fehlgeschlagen: ${archive}"
         return 1
     fi
     staged="${temporary}/${expected_root}"
     if ! sound_directory_has_wav "${staged}"; then
-        log "Sound archive does not contain any WAV files: ${archive}"
+        log "Soundarchiv enthält keine WAV-Dateien: ${archive}"
         return 1
     fi
     materialize_sound_links "${staged}" || return 1
@@ -492,24 +501,30 @@ install_sound_archive() (
         move_directory_to_backup "${target}" || return 1
     fi
     mv "${staged}" "${target}"
-    log "Sound directory installed: ${target}"
+    print_success "Soundverzeichnis wurde installiert: ${target}"
     return 0
 )
 
 install_german_sounds() {
-    local replace_existing=${1:-false}
+    local replace_existing=${1:-false} target
     local archive=${GERMAN_SOUND_ARCHIVE_DEFAULT}
     local expected_sha=${GERMAN_SOUND_SHA256}
     if [[ ${SVXLINK_TEST_MODE:-false} == true ]]; then
         archive=${GERMAN_SOUND_ARCHIVE:-${GERMAN_SOUND_ARCHIVE_DEFAULT}}
         expected_sha=${GERMAN_SOUND_SHA256_OVERRIDE:-${GERMAN_SOUND_SHA256}}
     fi
+    target="${SVXLINK_SOUNDS_DIR}/de_DE"
+    sound_package_already_present de_DE Deutsche && return 0
+    [[ ! -e ${target} || ${replace_existing} == true ]] || replace_existing=true
     install_sound_archive "${archive}" "${expected_sha}" "${GERMAN_SOUND_ROOT}" de_DE "${replace_existing}"
 }
 
 install_english_sounds() (
-    local replace_existing=${1:-false}
+    local replace_existing=${1:-false} target
     local temporary archive expected_sha=${ENGLISH_SOUND_SHA256}
+    sound_package_already_present en_US Englische && return 0
+    target="${SVXLINK_SOUNDS_DIR}/en_US"
+    [[ ! -e ${target} || ${replace_existing} == true ]] || replace_existing=true
     require_command curl || return 1
     if [[ ${SVXLINK_TEST_MODE:-false} == true ]]; then
         expected_sha=${ENGLISH_SOUND_SHA256_OVERRIDE:-${ENGLISH_SOUND_SHA256}}
@@ -522,7 +537,7 @@ install_english_sounds() (
     trap 'rm -rf "${temporary}"' EXIT
     archive="${temporary}/svxlink-sounds-en_US-heather-16k-25.05.tar.bz2"
     if ! run_logged 'Englische Sounds werden heruntergeladen' curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 --retry 2 --connect-timeout 20 -o "${archive}" "${ENGLISH_SOUND_URL}"; then
-        log "English sound download failed."
+        log 'Download der englischen Sounds fehlgeschlagen.'
         return 1
     fi
     if ! install_sound_archive "${archive}" "${expected_sha}" "${ENGLISH_SOUND_ROOT}" en_US "${replace_existing}"; then
@@ -535,17 +550,17 @@ activate_sound_language() {
     local language=$1
     local interactive=${2:-false}
     local target="${SVXLINK_SOUNDS_DIR}/${language}"
-    [[ -f ${SVXLINK_CONFIG} ]] || { log "SvxLink configuration not found: ${SVXLINK_CONFIG}"; return 1; }
+    [[ -f ${SVXLINK_CONFIG} ]] || { log "SvxLink-Konfiguration nicht gefunden: ${SVXLINK_CONFIG}"; return 1; }
     if ! grep -Fqx '[SimplexLogic]' "${SVXLINK_CONFIG}" || ! grep -Fqx '[RepeaterLogic]' "${SVXLINK_CONFIG}"; then
-        log "SimplexLogic and RepeaterLogic sections are required for language activation."
+        log 'Für die Sprachaktivierung sind die Abschnitte SimplexLogic und RepeaterLogic erforderlich.'
         return 1
     fi
     if ! sound_directory_has_wav "${target}"; then
-        log "No usable ${language} sound directory was found: ${target}"
+        log "Kein nutzbares ${language}-Soundverzeichnis gefunden: ${target}"
         return 1
     fi
     if ! normalize_sound_permissions "${target}"; then
-        log "${language} was not activated because sound permissions could not be normalized."
+        log "${language} wurde nicht aktiviert, weil die Soundrechte nicht normalisiert werden konnten."
         return 1
     fi
     if ${interactive}; then
@@ -555,7 +570,12 @@ activate_sound_language() {
     backup_file "${SVXLINK_CONFIG}"
     set_ini_value "${SVXLINK_CONFIG}" "SimplexLogic" "DEFAULT_LANG" "${language}"
     set_ini_value "${SVXLINK_CONFIG}" "RepeaterLogic" "DEFAULT_LANG" "${language}"
-    log "${language} was activated for SimplexLogic and RepeaterLogic. SvxLink was not started."
+    if [[ ${language} == de_DE ]]; then
+        print_success 'Deutsch ist für SimplexLogic und RepeaterLogic aktiviert.'
+    else
+        print_success 'Englisch ist für SimplexLogic und RepeaterLogic aktiviert.'
+    fi
+    print_info 'SvxLink wurde nicht gestartet.'
     return 0
 }
 
@@ -1459,7 +1479,7 @@ show_configuration() {
     repeater_language=$(ini_value "${SVXLINK_CONFIG}" "RepeaterLogic" "DEFAULT_LANG" || true)
     log "SimplexLogic DEFAULT_LANG: ${simplex_language:-missing}"
     log "RepeaterLogic DEFAULT_LANG: ${repeater_language:-missing}"
-    log "Sound directory: ${SVXLINK_SOUNDS_DIR}"
+    log "Soundverzeichnis: ${SVXLINK_SOUNDS_DIR}"
     for language in en_US de_DE; do
         if sound_directory_has_wav "${SVXLINK_SOUNDS_DIR}/${language}"; then
             log "${language}: available ($(sound_wav_count "${SVXLINK_SOUNDS_DIR}/${language}") WAV files)"
@@ -1504,9 +1524,9 @@ confirm_installation() {
 Aktion:             ${action}
 Rufzeichen:         ${CALLSIGN}
 Board:              $(hardware_profile_name "${HARDWARE_PROFILE}")
-Deutsche Sounds:    werden installiert
-Englische Sounds:   werden installiert
-Standardsprache:    Deutsch nach erfolgreicher Installation
+Deutsche Sounds:    werden geprüft
+Englische Sounds:   werden geprüft
+Standardsprache:    Deutsch wird geprüft und bei Bedarf aktiviert
 EOF
     if ${ACTION_YES}; then
         return 0
@@ -1565,29 +1585,34 @@ run_installation() {
         print_warning 'Die deutschen Sounds konnten nicht installiert werden. Englisch bleibt aktiv.'
     fi
     if ! install_english_sounds; then
-        print_error 'SvxLink wurde aktualisiert.'
-        print_error 'Die englischen Sounds konnten nicht installiert werden.'
-        print_error 'Die Installation ist daher noch nicht vollständig abgeschlossen.'
-        print_error 'Bitte behebe den Fehler und starte den Updatevorgang erneut.'
+        if ${BUILD_PERFORMED}; then print_warning 'SvxLink wurde erfolgreich aktualisiert.'; else print_warning 'SvxLink ist bereits aktuell.'; fi
+        print_error 'Die Soundinstallation konnte nicht vollständig abgeschlossen werden.'
+        print_info 'Der Updatevorgang kann erneut gestartet werden.'
         return 1
     fi
     if ${GERMAN_SOUNDS_AVAILABLE}; then
-        activate_sound_language de_DE false || die "German sound installation succeeded but language activation failed."
+        activate_sound_language de_DE false || die 'Die deutschen Sounds wurden installiert, konnten aber nicht aktiviert werden.'
     fi
     if [[ ${HARDWARE_PROFILE} == 4 ]]; then
         log "ELENATA boot configuration was prepared. Reboot before putting the station into service."
     fi
-    log "SvxLink was installed or updated."
-    log "English sound files are installed or already present."
-    if ${GERMAN_SOUNDS_AVAILABLE}; then
-        log "German sound files are installed and German is active."
+    if ${BUILD_PERFORMED}; then
+        print_success 'SvxLink wurde erfolgreich installiert oder aktualisiert.'
     else
-        log "German installation failed; English remains active."
+        print_success 'SvxLink ist bereits aktuell.'
+        print_info 'Build und Installation wurden übersprungen.'
     fi
-    log "SvxLink was not started automatically."
+    print_success 'Englische Sounddateien sind installiert.'
+    if ${GERMAN_SOUNDS_AVAILABLE}; then
+        print_success 'Deutsche Sounddateien sind installiert und Deutsch ist aktiv.'
+    else
+        print_warning 'Die deutschen Sounds sind nicht verfügbar; Englisch bleibt aktiv.'
+    fi
+    print_info 'SvxLink wurde nicht automatisch gestartet.'
     enable_svxlink_service
     if [[ ${HARDWARE_PROFILE} == 0 ]]; then
-        log "Base installation completed. Profile 0 does not create a productive audio, PTT or squelch configuration."
+        print_info 'Die Grundinstallation ist abgeschlossen.'
+        print_info 'Profil 0 erstellt keine produktive Audio-, PTT- oder Squelch-Konfiguration.'
     else
         log "Installation completed. Verify the hardware with sudo ./${SCRIPT_NAME} --check before starting operation."
     fi
@@ -1658,7 +1683,7 @@ EOF
                 [[ ${answer} == j || ${answer} == J ]] || { log "Keine Wiederherstellung durchgeführt."; continue; }
                 create_full_backup
                 cp -a "${SVXLINK_BACKUP_DIR}/${selected}/." /
-                log "Backup restored. SvxLink was not started."
+                log 'Backup wurde wiederhergestellt. SvxLink wurde nicht gestartet.'
                 ;;
             3) list_backups ;;
             4) return 0 ;;
@@ -1735,8 +1760,8 @@ run_menu() {
             1) install_menu || print_error 'Installationsaktion wurde nicht vollständig abgeschlossen.' ;;
             2) run_checks; read -r -p "ENTER zum Hauptmenü ..." _ ;;
             3) require_root_for_action --backup && backup_menu ;;
-            4) if require_root_for_action --install-german-sounds; then install_sound_interactively de_DE || log "German sound installation failed."; fi ;;
-            5) if require_root_for_action --install-english-sounds; then install_sound_interactively en_US || log "English sound installation failed."; fi ;;
+            4) if require_root_for_action --install-german-sounds; then install_sound_interactively de_DE || log 'Installation der deutschen Sounds fehlgeschlagen.'; fi ;;
+            5) if require_root_for_action --install-english-sounds; then install_sound_interactively en_US || log 'Installation der englischen Sounds fehlgeschlagen.'; fi ;;
             6) if require_root_for_action --activate-german-sounds; then show_german_activation_information; activate_sound_language de_DE true || log "German was not activated."; fi ;;
             7) if require_root_for_action --activate-english-sounds; then activate_sound_language en_US true || log "English was not activated."; fi ;;
             8) show_configuration ;;

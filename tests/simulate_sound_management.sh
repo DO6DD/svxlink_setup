@@ -27,8 +27,8 @@ make_archive() {
     local root_name=$1 archive=$2 source
     source="${TEMP_DIR}/${root_name}"
     mkdir -p "${source}/Core" "${source}/Default"
-    : >"${source}/Core/online.wav"
-    : >"${source}/Default/0.wav"
+    printf x >"${source}/Core/online.wav"
+    printf x >"${source}/Default/0.wav"
     tar -cjf "${archive}" -C "${TEMP_DIR}" "${root_name}"
     rm -rf "${source}"
 }
@@ -118,9 +118,8 @@ done
 
 mkdir -p "${SVXLINK_SOUNDS_DIR}/de_DE"
 : >"${SVXLINK_SOUNDS_DIR}/de_DE/local.wav"
-before_local=$(sha256sum "${SVXLINK_SOUNDS_DIR}/de_DE/local.wav" | awk '{print $1}')
 install_german_sounds
-assert_unchanged "${before_local}" "${SVXLINK_SOUNDS_DIR}/de_DE/local.wav" 'existing German files are preserved'
+expect_file "${SVXLINK_SOUNDS_DIR}/de_DE/Core/online.wav" 'empty German directory is replaced from embedded archive'
 rm -rf "${SVXLINK_SOUNDS_DIR}/de_DE"
 
 make_archive "${ENGLISH_SOUND_ROOT}" "${TEMP_DIR}/english.tar.bz2"
@@ -131,6 +130,16 @@ expect_file "${SVXLINK_SOUNDS_DIR}/en_US/Core/online.wav" 'English installation 
 expect_value "$(stat -c '%a' "${SVXLINK_SOUNDS_DIR}/en_US")" 755 'English sound directory permissions'
 expect_value "$(stat -c '%a' "${SVXLINK_SOUNDS_DIR}/en_US/Core/online.wav")" 644 'English sound file permissions'
 
+english_hash=$(find "${SVXLINK_SOUNDS_DIR}/en_US" -type f -exec sha256sum {} + | sha256sum | awk '{print $1}')
+# shellcheck disable=SC2317
+curl() { printf 'CURL_CALLED\n'; return 1; }
+install_english_sounds >"${TEMP_DIR}/english-present.out"
+unset -f curl
+expect_value "$(find "${SVXLINK_SOUNDS_DIR}/en_US" -type f -exec sha256sum {} + | sha256sum | awk '{print $1}')" "${english_hash}" 'existing English sounds are not extracted again'
+grep -Fq 'Download wird übersprungen.' "${TEMP_DIR}/english-present.out" && pass 'existing English sounds prevent download' || fail 'existing English sounds must prevent download'
+grep -Fq 'CURL_CALLED' "${TEMP_DIR}/english-present.out" && fail 'existing English sounds must not call curl' || pass 'existing English sounds do not call curl'
+
+rm -rf "${SVXLINK_SOUNDS_DIR}/en_US"
 export SVXLINK_TEST_MISSING_COMMANDS=curl
 if install_english_sounds >"${TEMP_DIR}/missing-curl.out" 2>&1; then fail 'missing curl must fail cleanly'; else pass 'missing curl is rejected before download'; fi
 grep -Fq 'Erforderliches Programm fehlt: curl' "${TEMP_DIR}/missing-curl.out" && pass 'missing curl names dependency' || fail 'missing curl names dependency'
@@ -142,6 +151,7 @@ export SVXLINK_TEST_MISSING_COMMANDS=bzip2
 if install_german_sounds >"${TEMP_DIR}/missing-bzip2.out" 2>&1; then fail 'missing bzip2 must fail cleanly'; else pass 'missing bzip2 is rejected before archive handling'; fi
 grep -Fq 'Erforderliches Programm fehlt: bzip2' "${TEMP_DIR}/missing-bzip2.out" && pass 'missing bzip2 names dependency' || fail 'missing bzip2 names dependency'
 unset SVXLINK_TEST_MISSING_COMMANDS
+install_english_sounds
 
 if activate_sound_language de_DE false >/dev/null 2>&1; then fail 'missing German language must not activate'; else pass 'missing German language leaves configuration unchanged'; fi
 expect_value "$(ini_value "${SVXLINK_CONFIG}" SimplexLogic DEFAULT_LANG)" en_US 'Simplex remains English when German missing'
@@ -169,6 +179,9 @@ backup_menu_output=$(printf '4\n' | backup_menu)
 [[ ${backup_menu_output} == *'BACKUP'* && ${backup_menu_output} == *'1) Neues Backup erstellen'* && ${backup_menu_output} == *'2) Vorhandenes Backup wiederherstellen'* ]] && pass 'backup submenu is reachable' || fail 'backup submenu is reachable'
 help_output=$(main --help)
 [[ ${help_output} == *'--install-german-sounds'* ]] && pass 'CLI help includes sound actions' || fail 'CLI help includes sound actions'
+ACTION_YES=true
+summary_output=$(confirm_installation Update)
+[[ ${summary_output} == *'Deutsche Sounds:    werden geprüft'* && ${summary_output} == *'Englische Sounds:   werden geprüft'* && ${summary_output} == *'Deutsch wird geprüft und bei Bedarf aktiviert'* ]] && pass 'installation summary describes sound checks neutrally' || fail 'installation summary must describe sound checks neutrally'
 snapshot_production_paths after
 assert_production_paths_unchanged
 

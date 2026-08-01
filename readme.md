@@ -135,6 +135,8 @@ Die read-only Aufrufe `./svxlink_setup.sh --help`, `--check` und `--show-config`
 
 Beim Update wird die SvxLink-Releaseversion normalisiert verglichen. Die in manchen Binärdateien sichtbare interne Kennung `1.10.1` ist nicht die Releaseversion: Aus `1.10.1@26.05.1` wird gezielt `26.05.1` ermittelt. Ist die Releaseversion nicht eindeutig feststellbar, wird aus Sicherheitsgründen neu gebaut.
 
+Ein unveränderter Update-Lauf wurde auf Debian 13 erfolgreich geprüft: CMake, Build und Installation werden übersprungen, während Profil-, Sound- und Sprachprüfungen weiterlaufen. Vor jedem Sounddownload prüft das Skript den vorhandenen Bestand anhand nicht leerer WAV-Dateien. Vollständige deutsche und englische Pakete bleiben erhalten und werden nicht erneut geladen oder entpackt; sichtbare Abschlussmeldungen unterscheiden Build, Skip und Soundfehler.
+
 Für die Sprachordner `de_DE` und `en_US` werden jeweils nur der gewählte Ordner und dessen reguläre Dateien berechtigt: `svxlink:svxlink`, Verzeichnisse `0755`, reguläre Dateien `0644`. Andere Sprachen und Ziele symbolischer Links bleiben unverändert.
 
 Um das Skript auszuführen, gehe bitte wie folgt vor:
