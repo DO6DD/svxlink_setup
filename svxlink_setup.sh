@@ -1268,6 +1268,34 @@ run_logged() {
     return 1
 }
 
+run_build_logged() {
+    local label=$1 offset status line
+    shift
+    start_install_log || return 1
+    print_info "${label} ..."
+    offset=$(wc -c <"${INSTALL_LOG_FILE}")
+    if "$@" 2>&1 | tee -a "${INSTALL_LOG_FILE}" | while IFS= read -r line; do
+        if [[ ( -t 1 || ${SVXLINK_TEST_FORCE_BUILD_PROGRESS:-false} == true ) && ${line} =~ \[[[:space:]]*([0-9]+)%\] ]]; then
+            printf '\r[BUILD] %3d %%' "${BASH_REMATCH[1]}"
+        fi
+    done; then
+        status=0
+    else
+        status=${PIPESTATUS[0]}
+    fi
+    append_install_output_to_debug_log "${offset}"
+    if [[ -t 1 || ${SVXLINK_TEST_FORCE_BUILD_PROGRESS:-false} == true ]]; then printf '\n'; fi
+    if (( status == 0 )); then
+        print_success "${label}"
+        return 0
+    fi
+    print_error "${label} fehlgeschlagen."
+    printf 'Letzte Protokollzeilen:\n'
+    tail -n 30 "${INSTALL_LOG_FILE}" || true
+    printf 'Vollständiges Protokoll: %s\n' "${INSTALL_LOG_FILE}"
+    return "${status}"
+}
+
 build_options_hash() {
     {
         printf 'BUILD_TYPE=Release\n'
@@ -1447,7 +1475,7 @@ build_svxlink() {
     fi
     [[ ! -L ${BUILD_DIR} ]] || die "Build directory must not be a symbolic link: ${BUILD_DIR}"
     run_logged 'CMake-Konfiguration wird ausgeführt' runuser -u "${INSTALL_USER}" -- cmake -S "${SOURCE_DIR}/src" -B "${BUILD_DIR}" "${CMAKE_OPTIONS[@]}" || return 1
-    run_logged 'SvxLink wird kompiliert' runuser -u "${INSTALL_USER}" -- cmake --build "${BUILD_DIR}" --parallel "$(nproc)" || return 1
+    run_build_logged 'SvxLink wird kompiliert' runuser -u "${INSTALL_USER}" -- cmake --build "${BUILD_DIR}" --parallel "$(nproc)" || return 1
     run_logged 'SvxLink wird installiert' cmake --install "${BUILD_DIR}" || return 1
     run_logged 'Linker-Cache wird aktualisiert' ldconfig || return 1
     BUILD_PERFORMED=true

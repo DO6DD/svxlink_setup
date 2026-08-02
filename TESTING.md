@@ -44,6 +44,8 @@ Erwartet und real bestätigt: unveränderter Quellstand und Releaseversion `26.0
 
 ## Simuliert validiert
 
+- `tests/simulate_build_progress.sh` prüft Prozentanzeige, vollständiges Buildlog, Fehlerstatus, Fehlerauszug und nichtinteraktiven Fallback.
+
 - Die ELENATA-Simulation prüft die vom Hauptskript selbst erzeugte einmalige Post-Boot-ALSA-Unit, das Hilfsskript, Pending und sichere Modi. SvxLink wird dabei nicht gestartet.
 - Die Bootsimulation prüft die Deaktivierung von `vc4-kms-v3d,cma-512`, den Erhalt fremder Overlays und die Idempotenz.
 

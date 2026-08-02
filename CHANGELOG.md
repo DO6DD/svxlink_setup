@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- CMake-Builds zeigen auf interaktiven Terminals echte, aus der Buildausgabe erkannte Fortschrittsprozente; das vollständige Buildprotokoll bleibt erhalten.
+
 - ELENATA deaktiviert aktive Varianten von `dtoverlay=vc4-kms-v3d`; der Systemcheck verwendet wieder die definierte Audio-Kartenprüfung. Capture 6/6 wird ohne Menüabfrage gesetzt und der Neustarthinweis steht am Ende.
 
 - ELENATA erhält eine pending-gesteuerte einmalige ALSA-Post-Boot-Konfiguration. Das Hauptskript erzeugt Unit, Hilfsskript und Konfiguration selbst; SvxLink wird nicht gestartet.
