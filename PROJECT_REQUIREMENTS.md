@@ -21,6 +21,8 @@
 
 ## Protokollierung
 
+- Fehlt bei ELENATA die Karte `Audio`, erzeugt `svxlink_setup.sh` selbst eine begrenzte einmalige Post-Boot-ALSA-Nachkonfiguration mit Pending-Datei und Log unter `/var/log/svxlink-setup/elenata-alsa-postboot.log`; SvxLink startet dabei nicht.
+
 - Die aktive SvxLink-Logdatei ist `/var/log/svxlink`.
 - Logrotate läuft täglich und behält 14 Rotationen.
 - Es werden `compress`, `delaycompress`, `missingok`, `notifempty` und `copytruncate` verwendet.

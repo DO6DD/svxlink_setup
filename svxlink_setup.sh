@@ -64,6 +64,24 @@ readonly RASPI_BLACKLIST_FILE="${raspi_blacklist_path}"
 readonly GPIO_CONFIG_FILE="${gpio_config_path}"
 readonly BUILD_STATE_FILE="${build_state_path}"
 readonly INSTALL_LOG_DIR="${install_log_dir_path}"
+if [[ ${SVXLINK_TEST_MODE:-false} == true ]]; then
+    elenata_alsa_unit_path=${ELENATA_ALSA_UNIT_FILE:-/tmp/svxlink-setup-test/systemd/svxlink-setup-elenata-alsa.service}
+    elenata_alsa_helper_path=${ELENATA_ALSA_HELPER_FILE:-/tmp/svxlink-setup-test/lib/elenata-alsa-postboot.sh}
+    elenata_alsa_pending_path=${ELENATA_ALSA_PENDING_FILE:-/tmp/svxlink-setup-test/state/elenata-alsa.pending}
+    elenata_alsa_config_path=${ELENATA_ALSA_CONFIG_FILE:-/tmp/svxlink-setup-test/etc/elenata-alsa.conf}
+    elenata_alsa_postboot_log_path=${ELENATA_ALSA_POSTBOOT_LOG_FILE:-/tmp/svxlink-setup-test/logs/elenata-alsa-postboot.log}
+else
+    elenata_alsa_unit_path=/etc/systemd/system/svxlink-setup-elenata-alsa.service
+    elenata_alsa_helper_path=/usr/local/lib/svxlink-setup/elenata-alsa-postboot.sh
+    elenata_alsa_pending_path=/var/lib/svxlink-setup/elenata-alsa.pending
+    elenata_alsa_config_path=/etc/svxlink-setup/elenata-alsa.conf
+    elenata_alsa_postboot_log_path=/var/log/svxlink-setup/elenata-alsa-postboot.log
+fi
+readonly ELENATA_ALSA_UNIT_FILE="${elenata_alsa_unit_path}"
+readonly ELENATA_ALSA_HELPER_FILE="${elenata_alsa_helper_path}"
+readonly ELENATA_ALSA_PENDING_FILE="${elenata_alsa_pending_path}"
+readonly ELENATA_ALSA_CONFIG_FILE="${elenata_alsa_config_path}"
+readonly ELENATA_ALSA_POSTBOOT_LOG_FILE="${elenata_alsa_postboot_log_path}"
 readonly GERMAN_SOUND_ARCHIVE_DEFAULT="${SCRIPT_DIR}/resources/sounds/de_DE-anna-16k.tar.bz2"
 readonly GERMAN_SOUND_SHA256="ec35d15ee3ddb012558c56626f408359db6108c701b2f27c9c3d89309ad78415"
 readonly GERMAN_SOUND_ROOT="de_DE-anna-16k"
@@ -99,6 +117,7 @@ DEBUG_FD=""
 DEBUG_STDOUT_FD=""
 DEBUG_STDERR_FD=""
 BUILD_PERFORMED=false
+ELENATA_ALSA_CARD_AVAILABLE=false
 CMAKE_OPTIONS=(
     -DUSE_QT=OFF
     -DCMAKE_INSTALL_PREFIX=/usr
@@ -180,6 +199,7 @@ on_error() {
     exit "${exit_code}"
 }
 trap on_error ERR
+
 
 start_debug_log() {
     local timestamp debug_log_dir
@@ -403,7 +423,17 @@ configure_hardware_profile() {
         1) configure_ics_pi_repeater ;;
         2) configure_usvxcard ;;
         3) configure_wm8960 ;;
-        4) configure_elenata_boot; configure_elenata_svxlink; configure_elenata_alsa ;;
+        4)
+            configure_elenata_boot
+            configure_elenata_svxlink
+            configure_elenata_alsa
+            if ${ELENATA_ALSA_CARD_AVAILABLE}; then
+                clear_elenata_alsa_postboot
+            else
+                install_elenata_alsa_postboot
+                print_info 'ELENATA-Audio wird nach dem nächsten Neustart automatisch konfiguriert. Ein erneuter manueller Setup-Lauf ist dafür nicht erforderlich.'
+            fi
+            ;;
         *) die "Unsupported hardware profile: ${HARDWARE_PROFILE}" ;;
     esac
 }
@@ -975,64 +1005,93 @@ configure_elenata_boot() {
     return 0
 }
 
-amixer_control_exists() {
-    amixer -c Audio scontrols 2>/dev/null | grep -Fq "'${1}'"
+install_elenata_alsa_runtime() {
+    local temporary unit_temporary config_temporary changed=false directory
+    for directory in "$(dirname "${ELENATA_ALSA_HELPER_FILE}")" "$(dirname "${ELENATA_ALSA_CONFIG_FILE}")" "$(dirname "${ELENATA_ALSA_PENDING_FILE}")" "$(dirname "${ELENATA_ALSA_POSTBOOT_LOG_FILE}")" "$(dirname "${ELENATA_ALSA_UNIT_FILE}")"; do
+        install -d -m 0755 "${directory}"
+    done
+    temporary=$(mktemp)
+    cat >"${temporary}" <<'EOF'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+note() { if [[ -n ${ELENATA_ALSA_LOG_FILE:-} ]]; then printf '%s %s\n' "$(date -Is)" "$1" >>"${ELENATA_ALSA_LOG_FILE}"; elif declare -F log >/dev/null; then log "$1"; else printf '%s\n' "$1"; fi; }
+card_number() { if declare -F audio_card_number >/dev/null; then audio_card_number; else awk '/^[[:space:]]*[0-9]+[[:space:]]+\[Audio\]/{gsub(/^[[:space:]]+/, "", $0); print $1; exit}' /proc/asound/cards 2>/dev/null || true; fi; }
+control_exists() { amixer -c Audio scontrols 2>/dev/null | grep -Fq "'$1'"; }
+required() { local control=$1; shift; control_exists "${control}" || { note "Required ALSA control is unavailable: ${control}"; return 1; }; amixer -c Audio sset "${control}" "$@" || { note "Could not set required ALSA control: ${control}"; return 1; }; note "ALSA control configured: ${control}"; }
+optional() { local control=$1 value=$2; if control_exists "${control}"; then amixer -c Audio sset "${control}" "${value}" || note "Could not set optional ALSA control: ${control}"; else note "Optional ALSA control is unavailable: ${control}"; fi; }
+apply() { local card; command -v amixer >/dev/null 2>&1 || { note 'Required command is unavailable: amixer'; return 1; }; command -v asactl >/dev/null 2>&1 || { note 'Required command is unavailable: asactl'; return 1; }; card=$(card_number); [[ -n ${card} ]] || return 2; required 'Capture Mux' LINE_IN && required Capture "${CAPTURE_LEFT:-6},${CAPTURE_RIGHT:-6}" unmute && required PCM 166,166 && required Lineout 21,21 unmute || return 1; optional 'Capture Attenuate Switch (-6dB)' on; optional AVC off; optional 'AVC Hard Limiter' off; optional Mic 0; if [[ -n ${ALSA_STATE_FILE:-} ]]; then asactl store -f "${ALSA_STATE_FILE}" "${card}"; else asactl store "${card}"; fi || { note "Could not store ALSA state for card ${card}"; return 1; }; note "ALSA state stored for card ${card}"; }
+[[ ${ELENATA_ALSA_LIBRARY:-false} == true ]] && return 0
+source "${ELENATA_ALSA_CONFIG_FILE}"
+install -d -m 0755 "$(dirname "${ELENATA_ALSA_LOG_FILE}")"; : >"${ELENATA_ALSA_LOG_FILE}"; chmod 0600 "${ELENATA_ALSA_LOG_FILE}"; chown root:root "${ELENATA_ALSA_LOG_FILE}" 2>/dev/null || true
+note 'Post-boot ELENATA ALSA configuration started; timeout 90s.'
+for attempt in $(seq 1 45); do card=$(card_number); [[ -z ${card} ]] || break; sleep 2; done
+note "ALSA card scan after ${attempt} attempt(s): ${card:-Audio not found}"
+[[ -n ${card} ]] || { note 'RESULT: failure; Audio did not appear before timeout.'; exit 1; }
+apply || { note 'RESULT: failure; ALSA configuration was not completed.'; exit 1; }
+rm -f -- "${ELENATA_ALSA_PENDING_FILE}" || { note 'RESULT: failure; pending marker could not be removed.'; exit 1; }
+note 'RESULT: success; pending marker removed.'
+EOF
+    if [[ ! -f ${ELENATA_ALSA_HELPER_FILE} ]] || ! cmp -s "${temporary}" "${ELENATA_ALSA_HELPER_FILE}"; then install -m 0755 "${temporary}" "${ELENATA_ALSA_HELPER_FILE}"; fi
+    rm -f "${temporary}"
+    config_temporary=$(mktemp)
+    printf 'CAPTURE_LEFT=%q\nCAPTURE_RIGHT=%q\n' "${CAPTURE_LEFT}" "${CAPTURE_RIGHT}" >"${config_temporary}"
+    if [[ ! -f ${ELENATA_ALSA_CONFIG_FILE} ]] || ! cmp -s "${config_temporary}" "${ELENATA_ALSA_CONFIG_FILE}"; then install -m 0600 "${config_temporary}" "${ELENATA_ALSA_CONFIG_FILE}"; fi
+    rm -f "${config_temporary}"
+    unit_temporary=$(mktemp)
+    cat >"${unit_temporary}" <<EOF
+[Unit]
+Description=Apply pending ELENATA ALSA setup after boot
+After=local-fs.target sound.target
+Wants=sound.target
+ConditionPathExists=${ELENATA_ALSA_PENDING_FILE}
+
+[Service]
+Type=oneshot
+Environment=ELENATA_ALSA_LOG_FILE=${ELENATA_ALSA_POSTBOOT_LOG_FILE}
+Environment=ELENATA_ALSA_PENDING_FILE=${ELENATA_ALSA_PENDING_FILE}
+EnvironmentFile=${ELENATA_ALSA_CONFIG_FILE}
+ExecStart=${ELENATA_ALSA_HELPER_FILE}
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    if [[ ! -f ${ELENATA_ALSA_UNIT_FILE} ]] || ! cmp -s "${unit_temporary}" "${ELENATA_ALSA_UNIT_FILE}"; then
+        install -m 0644 "${unit_temporary}" "${ELENATA_ALSA_UNIT_FILE}"
+        changed=true
+    fi
+    rm -f "${unit_temporary}"
+    if ${changed}; then systemctl daemon-reload; fi
 }
 
-set_optional_amixer_control() {
-    local control=$1
-    local value=$2
-    if amixer_control_exists "${control}"; then
-        amixer -c Audio sset "${control}" "${value}" || \
-            log "Could not set optional ALSA control: ${control}"
-    else
-        log "Optional ALSA control is unavailable: ${control}"
-    fi
+install_elenata_alsa_postboot() {
+    install_elenata_alsa_runtime
+    install -m 0600 /dev/null "${ELENATA_ALSA_PENDING_FILE}"
+    systemctl enable svxlink-setup-elenata-alsa.service
 }
 
-set_required_amixer_control() {
-    local control=$1
-    shift
-    if ! amixer_control_exists "${control}"; then
-        log "Required ALSA control is unavailable: ${control}"
-        return 1
-    fi
-    if ! amixer -c Audio sset "${control}" "$@"; then
-        log "Could not set required ALSA control: ${control}"
-        return 1
-    fi
-    log "ALSA control configured: ${control}"
+clear_elenata_alsa_postboot() {
+    rm -f -- "${ELENATA_ALSA_PENDING_FILE}"
+    systemctl disable svxlink-setup-elenata-alsa.service 2>/dev/null || true
 }
 
 audio_card_number() {
     awk '/^[[:space:]]*[0-9]+[[:space:]]+\[Audio\]/{gsub(/^[[:space:]]+/, "", $0); print $1; exit}' /proc/asound/cards 2>/dev/null || true
 }
 
-audio_card_available() {
-    [[ -n $(audio_card_number) ]]
-}
-
 configure_elenata_alsa() {
     local card_number
-    if ! audio_card_available; then
-        log "ALSA card Audio is not available yet; ALSA values will be applied after reboot by rerunning the script."
+    ELENATA_ALSA_CARD_AVAILABLE=false
+    card_number=$(audio_card_number || true)
+    if [[ -z ${card_number} ]]; then
+        log 'ALSA card Audio is not available yet.'
         return 0
     fi
-    card_number=$(audio_card_number)
-
-    set_required_amixer_control "Capture Mux" "LINE_IN" || return 1
-    set_required_amixer_control "Capture" "${CAPTURE_LEFT},${CAPTURE_RIGHT}" unmute || return 1
-    set_required_amixer_control "PCM" "166,166" || return 1
-    set_required_amixer_control "Lineout" "21,21" unmute || return 1
-    set_optional_amixer_control "Capture Attenuate Switch (-6dB)" on
-    set_optional_amixer_control "AVC" off
-    set_optional_amixer_control "AVC Hard Limiter" off
-    set_optional_amixer_control "Mic" 0
-    if [[ -n ${ALSA_STATE_FILE} ]]; then
-        asactl store -f "${ALSA_STATE_FILE}" "${card_number}" || die "Could not store ALSA state for card ${card_number}."
-    else
-        asactl store "${card_number}" || die "Could not store ALSA state for card ${card_number}."
-    fi
+    install_elenata_alsa_runtime
+    # shellcheck disable=SC1090
+    ELENATA_ALSA_LIBRARY=true source "${ELENATA_ALSA_HELPER_FILE}"
+    apply || return 1
+    ELENATA_ALSA_CARD_AVAILABLE=true
 }
 
 set_ini_value() {

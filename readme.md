@@ -53,6 +53,8 @@ Profiles 1 to 3 were restored from the historical installer implementation. Thei
 
 For ELENATA, the installer manages the following boot settings in the effective `[all]` section: `dtparam=i2c0=on`, `dtparam=i2c1=on`, `dtparam=audio=off`, `dtoverlay=fe-pi-audio`, `dtoverlay=disable-bt`, `enable_uart=1`, `arm_boost=1`, `arm_64bit=1`, `gpu_mem=256`, `hdmi_force_hotplug=1`, `hdmi_group=2`, and `hdmi_mode=16`. It removes duplicate/conflicting managed entries in the preamble or `[all]`, preserves `[cm4]` and `[cm5]` unchanged, and creates a boot backup only when a change is necessary. ELENATA GPIOD assignments remain fixed: Rx1 26/Tx1 13, and optional Rx2 6/Tx2 5 on `gpiochip0`.
 
+One ELENATA setup run followed by a reboot is sufficient. If `Audio` is unavailable, a pending one-shot service waits up to 90 seconds after the next boot, applies the existing mixer settings and saves ALSA state. It logs to `/var/log/svxlink-setup/elenata-alsa-postboot.log`; success removes pending, while failure preserves it. SvxLink is never started. For manual retry, recreate `/var/lib/svxlink-setup/elenata-alsa.pending` as root and run `sudo systemctl start svxlink-setup-elenata-alsa.service`. For a real installation, `svxlink_setup.sh` is the only required file; test files are not needed on the target system.
+
 ## Installation
 
 We assume that we are dealing with a freshly installed Raspberry Pi with the current Raspbian / Raspberry Pi OS or Debian 11 “Bookworm” installed.

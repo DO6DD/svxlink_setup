@@ -17,6 +17,12 @@ export ALSA_STATE_FILE="${TEMP_DIR}/asound.state"
 export LOG_FILE="${TEMP_DIR}/svxlink.log"
 export LOGROTATE_FILE="${TEMP_DIR}/svxlink.logrotate"
 export SVXLINK_BACKUP_DIR="${TEMP_DIR}/backups"
+export ELENATA_ALSA_UNIT_FILE="${TEMP_DIR}/systemd/svxlink-setup-elenata-alsa.service"
+export ELENATA_ALSA_HELPER_FILE="${TEMP_DIR}/lib/elenata-alsa-postboot.sh"
+export ELENATA_ALSA_PENDING_FILE="${TEMP_DIR}/state/elenata-alsa.pending"
+export ELENATA_ALSA_CONFIG_FILE="${TEMP_DIR}/etc/elenata-alsa.conf"
+export ELENATA_ALSA_POSTBOOT_LOG_FILE="${TEMP_DIR}/logs/elenata-alsa-postboot.log"
+mkdir -p "${TEMP_DIR}/systemd" "${TEMP_DIR}/lib" "${TEMP_DIR}/state" "${TEMP_DIR}/etc" "${TEMP_DIR}/logs"
 
 audio_present=true
 missing_control=""
@@ -207,6 +213,15 @@ if (configure_elenata_alsa) >/dev/null 2>&1; then fail 'missing required control
 missing_control='AVC Hard Limiter'
 configure_elenata_alsa && pass 'missing optional control handled' || fail 'missing optional control handled'
 missing_control=''
+audio_present=false
+HARDWARE_PROFILE=4
+configure_hardware_profile
+[[ -f ${ELENATA_ALSA_PENDING_FILE} && -f ${ELENATA_ALSA_UNIT_FILE} && -f ${ELENATA_ALSA_HELPER_FILE} && -f ${ELENATA_ALSA_CONFIG_FILE} ]] && pass 'missing Audio creates all post-boot runtime files' || fail 'missing Audio creates post-boot runtime files'
+[[ $(stat -c '%a' "${ELENATA_ALSA_HELPER_FILE}") == 755 && $(stat -c '%a' "${ELENATA_ALSA_CONFIG_FILE}") == 600 ]] && pass 'post-boot runtime files have safe modes' || fail 'post-boot runtime file modes'
+grep -Fq 'TimeoutStartSec=120' "${ELENATA_ALSA_UNIT_FILE}" && ! grep -Fq 'svxlink.service' "${ELENATA_ALSA_UNIT_FILE}" && pass 'post-boot unit is bounded and does not start SvxLink' || fail 'post-boot unit boundaries'
+audio_present=true
+configure_hardware_profile
+[[ ! -e ${ELENATA_ALSA_PENDING_FILE} ]] && pass 'available Audio clears pending post-boot setup' || fail 'available Audio clears pending post-boot setup'
 printf '16\n8\n' >"${TEMP_DIR}/capture-input"
 prompt_level 'Capture test' 6 <"${TEMP_DIR}/capture-input" >"${TEMP_DIR}/capture-output"
 grep -Fqx 8 "${TEMP_DIR}/capture-output" && pass 'invalid capture value rejected' || fail 'invalid capture value rejected'

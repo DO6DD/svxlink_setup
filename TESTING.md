@@ -44,6 +44,8 @@ Erwartet und real bestätigt: unveränderter Quellstand und Releaseversion `26.0
 
 ## Simuliert validiert
 
+- Die ELENATA-Simulation prüft die vom Hauptskript selbst erzeugte einmalige Post-Boot-ALSA-Unit, das Hilfsskript, Pending und sichere Modi. SvxLink wird dabei nicht gestartet.
+
 - Idempotente ELENATA-Bootkonfiguration.
 - ELENATA-Bootwerte werden im wirksamen `[all]` ergänzt, abweichende und doppelte verwaltete Werte werden ersetzt; `[cm4]` und `[cm5]` bleiben bytegleich erhalten.
 - `-D`, `-D --check` und der Debug-Menüstart werden isoliert geprüft. Debuglogs werden nur in temporären Testpfaden erzeugt; der Normalmodus aktiviert kein Shell-Tracing.

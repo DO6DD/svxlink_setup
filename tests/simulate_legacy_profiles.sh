@@ -24,6 +24,7 @@ export DRIVER_SOURCE_DIR="${TEMP_DIR}/drivers"
 failures=0
 successes=0
 MOCK_LOG="${TEMP_DIR}/mock.log"
+systemctl() { :; }
 cleanup() { rm -rf "${TEMP_DIR}"; }
 trap cleanup EXIT
 pass() { test_line '[ OK ]' "$*"; successes=$((successes + 1)); }

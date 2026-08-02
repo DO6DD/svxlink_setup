@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- ELENATA erhält eine pending-gesteuerte einmalige ALSA-Post-Boot-Konfiguration. Das Hauptskript erzeugt Unit, Hilfsskript und Konfiguration selbst; SvxLink wird nicht gestartet.
+
 - ELENATA-Bootwerte werden nun idempotent im wirksamen `[all]`-Abschnitt verwaltet; doppelte oder abweichende verwaltete Einträge werden bereinigt, `[cm4]` und `[cm5]` bleiben unverändert. Die festen GPIOD-Pins wurden nicht geändert.
 - Optionalen Diagnosemodus `-D` ergänzt. Er protokolliert Shell-Trace einschließlich Quellzeilen und Exitstatus sowie Ausgaben unter `/var/log/svxlink-setup/debug-<Zeitstempel>.log` (Modus `0600`), ohne normale Installationslogs zu ersetzen.
 - Der SvxLink-Quellpfad verwendet ausdrücklich weiter `https://github.com/sm0svx/svxlink.git` auf `master`; automatische Release-Tag-Auswahl wird nicht verwendet.
