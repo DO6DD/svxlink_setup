@@ -1,6 +1,7 @@
 # Status
 
 - Aktueller Branch: `project-documentation`
+- Pi-Test ohne ELENATA-Board bestätigte Installation und Bootwerte; Fe-Pi-Audio, ALSA, Mixer und GPIO bleiben ohne Board nicht hardwarevalidiert.
 - Aktueller Stand: realer Debian-13-VM-Update-Skip einschließlich Sound- und Sprachprüfung bestätigt.
 - Letzter real bestätigter Stand: `cb555b8`
 

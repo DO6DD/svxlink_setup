@@ -119,7 +119,7 @@ snapshot before
 detect_operating_system
 expect "${IS_RASPBERRY_PI}" true 'test Raspberry Pi detection'
 expect "${BOOT_CONFIG}" "${BOOT_CONFIG_FILE}" 'test boot path'
-printf '%s\n' '# vorhandene Kommentare' 'dtparam=spi=on' 'dtparam=i2c_arm=on' 'arm_64bit=0' '[all]' 'dtparam=audio=on' 'dtoverlay=fe-pi-audio' 'dtoverlay=fe-pi-audio' 'enable_uart=0' '[cm4]' 'dtoverlay=vc4-kms-v3d' 'arm_64bit=0' '[cm5]' 'dtoverlay=dwc2' 'gpu_mem=64' '#dtparam=audio=on' '#dtoverlay=ir-receiver' >"${BOOT_CONFIG}"
+printf '%s\n' '# vorhandene Kommentare' 'dtparam=spi=on' 'dtparam=i2c_arm=on' 'dtoverlay=vc4-kms-v3d,cma-512' 'arm_64bit=0' '[all]' 'dtparam=audio=on' 'dtoverlay=fe-pi-audio' 'dtoverlay=fe-pi-audio' 'enable_uart=0' '[cm4]' 'dtoverlay=other-overlay' 'arm_64bit=0' '[cm5]' 'dtoverlay=dwc2' 'gpu_mem=64' '#dtparam=audio=on' '#dtoverlay=ir-receiver' >"${BOOT_CONFIG}"
 configure_elenata_boot
 boot_hash=$(sha256sum "${BOOT_CONFIG}" | awk '{print $1}')
 backups=$(find "${SVXLINK_BACKUP_DIR}" -type f | wc -l)
@@ -131,7 +131,9 @@ for value in 'dtparam=i2c0=on' 'dtparam=i2c1=on' 'dtparam=audio=off' 'dtoverlay=
     expect "$(boot_all_line "${value}")" "${value}" "${value} effective in [all]"
 done
 line "${BOOT_CONFIG}" '# Inserted by SVXLINK Setup Script' 'valid boot marker comment'
-for value in 'dtparam=spi=on' 'dtparam=i2c_arm=on' 'dtoverlay=vc4-kms-v3d' 'dtoverlay=dwc2' '[cm4]' 'arm_64bit=0' '[cm5]' 'gpu_mem=64' '# vorhandene Kommentare' '#dtparam=audio=on' '#dtoverlay=ir-receiver'; do line "${BOOT_CONFIG}" "${value}" "preserve ${value}"; done
+for value in 'dtparam=spi=on' 'dtparam=i2c_arm=on' 'dtoverlay=other-overlay' 'dtoverlay=dwc2' '[cm4]' 'arm_64bit=0' '[cm5]' 'gpu_mem=64' '# vorhandene Kommentare' '#dtparam=audio=on' '#dtoverlay=ir-receiver'; do line "${BOOT_CONFIG}" "${value}" "preserve ${value}"; done
+[[ $(grep -cE '^[[:space:]]*dtoverlay=vc4-kms-v3d(,|$)' "${BOOT_CONFIG}" || true) == 0 ]] && pass 'active vc4-kms-v3d overlay is disabled' || fail 'active vc4-kms-v3d overlay remains'
+line "${BOOT_CONFIG}" '# dtoverlay=vc4-kms-v3d,cma-512 # disabled for ELENATA Fe-Pi Audio' 'vc4-kms-v3d parameters are preserved in disabled comment'
 cp "${BOOT_CONFIG}" "${TEMP_DIR}/readonly-config.txt"
 sed -i '/dtparam=i2c1=on/d' "${TEMP_DIR}/readonly-config.txt"
 saved_boot_config=${BOOT_CONFIG}

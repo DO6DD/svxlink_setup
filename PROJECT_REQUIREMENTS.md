@@ -6,6 +6,7 @@
 - Ziel ist die schnelle Installation einer neuen Raspberry-Pi-SD-Karte für SvxLink mit angeschlossener ELENATA-Hardware.
 - Unterstützt werden aktuelle Raspberry-Pi-OS-Versionen sowie Debian-Versionen, soweit die jeweilige Hardware dies zulässt.
 - ELENATA ist das wichtigste Hardwareprofil.
+- ELENATA deaktiviert aktive `vc4-kms-v3d`-Overlays, verwendet Capture 6/6 ohne Rückfrage und verlangt nach der Bootkonfiguration einen klaren Neustarthinweis.
 - Die ELENATA-Konfiguration richtet sich nach der Anleitung des Entwicklers und nach bereits funktionierenden Referenzsystemen.
 
 ## Benutzer und Pakete

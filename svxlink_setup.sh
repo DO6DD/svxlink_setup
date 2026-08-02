@@ -807,8 +807,9 @@ choose_hardware_profile() {
                 *) log "Bitte j oder n eingeben." ;;
             esac
         done
-        CAPTURE_LEFT=$(prompt_level "Capture-Pegel links" 6)
-        CAPTURE_RIGHT=$(prompt_level "Capture-Pegel rechts" 6)
+        CAPTURE_LEFT=6
+        CAPTURE_RIGHT=6
+        log 'ELENATA-Capture-Pegel werden automatisch auf links 6 und rechts 6 gesetzt.'
     fi
     return 0
 }
@@ -980,6 +981,10 @@ configure_elenata_boot() {
             print
             next
         }
+        /^[[:space:]]*dtoverlay=vc4-kms-v3d(,.*)?[[:space:]]*$/ {
+            print "# " $0 " # disabled for ELENATA Fe-Pi Audio"
+            next
+        }
         section == "all" {
             if ($0 == "# Inserted by SVXLINK Setup Script") next
             if (managed_key($0) in wanted) next
@@ -1077,6 +1082,10 @@ clear_elenata_alsa_postboot() {
 
 audio_card_number() {
     awk '/^[[:space:]]*[0-9]+[[:space:]]+\[Audio\]/{gsub(/^[[:space:]]+/, "", $0); print $1; exit}' /proc/asound/cards 2>/dev/null || true
+}
+
+audio_card_available() {
+    [[ -n $(audio_card_number) ]]
 }
 
 configure_elenata_alsa() {
@@ -1755,9 +1764,6 @@ run_installation() {
     if ${GERMAN_SOUNDS_AVAILABLE}; then
         activate_sound_language de_DE false || die 'Die deutschen Sounds wurden installiert, konnten aber nicht aktiviert werden.'
     fi
-    if [[ ${HARDWARE_PROFILE} == 4 ]]; then
-        log "ELENATA boot configuration was prepared. Reboot before putting the station into service."
-    fi
     if ${BUILD_PERFORMED}; then
         print_success 'SvxLink wurde erfolgreich installiert oder aktualisiert.'
     else
@@ -1777,6 +1783,9 @@ run_installation() {
         print_info 'Profil 0 erstellt keine produktive Audio-, PTT- oder Squelch-Konfiguration.'
     else
         log "Installation completed. Verify the hardware with sudo ./${SCRIPT_NAME} --check before starting operation."
+    fi
+    if [[ ${HARDWARE_PROFILE} == 4 ]]; then
+        printf '\n============================================================\nNEUSTART ERFORDERLICH\n============================================================\nDie ELENATA-Bootkonfiguration wurde vorbereitet.\n\nBitte jetzt neu starten:\n\n  reboot\n\nNach dem Neustart die Hardware prüfen und anschließend SvxLink starten.\n============================================================\n'
     fi
 }
 

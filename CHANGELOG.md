@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- ELENATA deaktiviert aktive Varianten von `dtoverlay=vc4-kms-v3d`; der Systemcheck verwendet wieder die definierte Audio-Kartenprüfung. Capture 6/6 wird ohne Menüabfrage gesetzt und der Neustarthinweis steht am Ende.
+
 - ELENATA erhält eine pending-gesteuerte einmalige ALSA-Post-Boot-Konfiguration. Das Hauptskript erzeugt Unit, Hilfsskript und Konfiguration selbst; SvxLink wird nicht gestartet.
 
 - ELENATA-Bootwerte werden nun idempotent im wirksamen `[all]`-Abschnitt verwaltet; doppelte oder abweichende verwaltete Einträge werden bereinigt, `[cm4]` und `[cm5]` bleiben unverändert. Die festen GPIOD-Pins wurden nicht geändert.
