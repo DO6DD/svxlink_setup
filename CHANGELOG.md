@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- ELENATA verwendet jetzt den vollständigen DB0DAM-950-Mixerzustand mit Routing-, Headphone-, AVC-, BASS-, DAP-/I2S- und Zero-Cross-Reglern als Pflichtreglern; DB0VL-Pegel bleiben bewusst kein Standard.
+
 - CMake-Builds zeigen auf interaktiven Terminals echte, aus der Buildausgabe erkannte Fortschrittsprozente; das vollständige Buildprotokoll bleibt erhalten.
 
 - ELENATA deaktiviert aktive Varianten von `dtoverlay=vc4-kms-v3d`; der Systemcheck verwendet wieder die definierte Audio-Kartenprüfung. Capture 6/6 wird ohne Menüabfrage gesetzt und der Neustarthinweis steht am Ende.

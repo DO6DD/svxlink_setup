@@ -57,6 +57,8 @@ For ELENATA, the installer manages the following boot settings in the effective 
 
 For ELENATA, active `dtoverlay=vc4-kms-v3d` entries (including parameter variants) are disabled so HDMI audio does not compete with Fe-Pi Audio. Capture levels are fixed automatically at 6/6. The final installation block requires a reboot; the system check reports a missing `Audio` card clearly without an internal shell error. This behavior was checked on a Raspberry Pi without the ELENATA board; real audio, mixer, GPIO and PTT validation remain open.
 
+DB0DAM-950 is the complete ELENATA mixer-state reference: Headphone 120/120, PCM 165/165, Lineout 21/21, Capture 6/6, all documented routing/zero-cross controls, AVC parameters at 0/off, BASS 0–4 at 0, and the DAP/I2S signal path. Every listed control is required before ALSA state is saved. DB0VL is only a station-specific configuration with different, higher levels and is not the installation default. Levels can later be adjusted per station; real ELENATA hardware validation remains open.
+
 One ELENATA setup run followed by a reboot is sufficient. If `Audio` is unavailable, a pending one-shot service waits up to 90 seconds after the next boot, applies the existing mixer settings and saves ALSA state. It logs to `/var/log/svxlink-setup/elenata-alsa-postboot.log`; success removes pending, while failure preserves it. SvxLink is never started. For manual retry, recreate `/var/lib/svxlink-setup/elenata-alsa.pending` as root and run `sudo systemctl start svxlink-setup-elenata-alsa.service`. For a real installation, `svxlink_setup.sh` is the only required file; test files are not needed on the target system.
 
 ## Installation

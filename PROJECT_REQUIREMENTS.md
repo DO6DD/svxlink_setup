@@ -8,6 +8,7 @@
 - ELENATA ist das wichtigste Hardwareprofil.
 - ELENATA deaktiviert aktive `vc4-kms-v3d`-Overlays, verwendet Capture 6/6 ohne Rückfrage und verlangt nach der Bootkonfiguration einen klaren Neustarthinweis.
 - Die ELENATA-Konfiguration richtet sich nach der Anleitung des Entwicklers und nach bereits funktionierenden Referenzsystemen.
+- DB0DAM-950 ist die vollständige Referenz für ELENATA-Mixerstandardwerte einschließlich Routing, AVC, BASS und DAP/I2S. Alle Referenzregler sind Pflichtregler. Die höheren DB0VL-Pegel sind nur stationsspezifisch und kein Installationsstandard; Anpassungen bleiben später möglich.
 
 ## Benutzer und Pakete
 

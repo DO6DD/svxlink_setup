@@ -94,7 +94,7 @@ amixer() {
     if [[ $* == *scontrols* ]]; then
         ${audio_present} || return 1
         local control
-        for control in 'Capture Mux' 'Capture' 'Capture Attenuate Switch (-6dB)' PCM Lineout AVC 'AVC Hard Limiter' Mic; do
+        for control in Headphone 'Headphone Mux' 'Headphone Playback ZC' PCM Lineout Mic Capture 'Capture Attenuate Switch (-6dB)' 'Capture Mux' 'Capture ZC' AVC 'AVC Hard Limiter' 'AVC Integrator Response' 'AVC Max Gain' 'AVC Threshold' 'BASS 0' 'BASS 1' 'BASS 2' 'BASS 3' 'BASS 4' 'DAP MIX Mux' 'DAP Main channel' 'DAP Mix channel' 'DAP Mux' 'Digital Input Mux'; do
             [[ ${control} == "${missing_control}" ]] || printf "Simple mixer control '%s',0\n" "${control}"
         done
     fi
@@ -193,19 +193,37 @@ for section in Tx1 Tx2; do expect "$(awk -v s="${section}" '$0 == "[" s "]" {on=
 
 configure_elenata_alsa
 for controls in \
-    'Capture Mux|LINE_IN' \
+    'Headphone|120,120|unmute' \
+    'Headphone Mux|LINE_IN' \
+    'Headphone Playback ZC|on' \
+    'PCM|165,165' \
+    'Lineout|21,21|unmute' \
+    'Mic|0' \
     'Capture|6,6|unmute' \
     'Capture Attenuate Switch (-6dB)|on' \
-    'PCM|166,166' \
-    'Lineout|21,21|unmute' \
+    'Capture Mux|LINE_IN' \
+    'Capture ZC|on' \
     'AVC|off' \
     'AVC Hard Limiter|off' \
-    'Mic|0'; do
+    'AVC Integrator Response|0' \
+    'AVC Max Gain|0' \
+    'AVC Threshold|0' \
+    'BASS 0|0' \
+    'BASS 1|0' \
+    'BASS 2|0' \
+    'BASS 3|0' \
+    'BASS 4|0' \
+    'DAP MIX Mux|ADC' \
+    'DAP Main channel|0' \
+    'DAP Mix channel|0' \
+    'DAP Mux|ADC' \
+    'Digital Input Mux|I2S'; do
     IFS='|' read -r control value option <<<"${controls}"
     if [[ -n ${option:-} ]]; then mock_has amixer -c Audio sset "${control}" "${value}" "${option}"; else mock_has amixer -c Audio sset "${control}" "${value}"; fi && pass "ALSA ${control}" || fail "ALSA ${control}"
 done
 mock_has asactl store -f "${ALSA_STATE_FILE}" 2 && pass 'ALSA state path and card number' || fail 'ALSA state path and card number'
 [[ -f ${ALSA_STATE_FILE} ]] && pass 'ALSA state file created' || fail 'ALSA state file created'
+[[ $(grep -n 'amixer <.*Headphone Playback ZC.*\|asactl <' "${MOCK_LOG}" | tail -n 1) == *'asactl <'* ]] && pass 'asactl runs after complete ALSA control sequence' || fail 'asactl must run after controls'
 CAPTURE_LEFT=8; CAPTURE_RIGHT=5; configure_elenata_alsa
 mock_has amixer -c Audio sset Capture 8,5 unmute && pass 'separate capture levels' || fail 'separate capture levels'
 audio_present=false
@@ -213,7 +231,7 @@ configure_elenata_alsa && pass 'missing Audio card handled' || fail 'missing Aud
 audio_present=true; missing_control=PCM
 if (configure_elenata_alsa) >/dev/null 2>&1; then fail 'missing required control must fail'; else pass 'missing required control fails'; fi
 missing_control='AVC Hard Limiter'
-configure_elenata_alsa && pass 'missing optional control handled' || fail 'missing optional control handled'
+if (configure_elenata_alsa) >/dev/null 2>&1; then fail 'missing required AVC limiter must fail'; else pass 'missing required AVC limiter fails'; fi
 missing_control=''
 audio_present=false
 HARDWARE_PROFILE=4

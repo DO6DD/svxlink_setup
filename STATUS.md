@@ -3,6 +3,7 @@
 - Aktueller Branch: `project-documentation`
 - Der CMake-Live-Fortschritt ist isoliert simuliert; ein realer Raspberry-Pi-Neubau steht noch aus.
 - Pi-Test ohne ELENATA-Board bestätigte Installation und Bootwerte; Fe-Pi-Audio, ALSA, Mixer und GPIO bleiben ohne Board nicht hardwarevalidiert.
+- Die vollständigen DB0DAM-950-Mixer-, AVC-, BASS- und Signalwegwerte sind als Konfigurationsreferenz hinterlegt; ihr Verhalten auf echter ELENATA-Hardware ist noch nicht durch diesen Projektstand validiert.
 - Aktueller Stand: realer Debian-13-VM-Update-Skip einschließlich Sound- und Sprachprüfung bestätigt.
 - Letzter real bestätigter Stand: `cb555b8`
 

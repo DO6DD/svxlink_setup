@@ -47,6 +47,7 @@ Erwartet und real bestätigt: unveränderter Quellstand und Releaseversion `26.0
 - `tests/simulate_build_progress.sh` prüft Prozentanzeige, vollständiges Buildlog, Fehlerstatus, Fehlerauszug und nichtinteraktiven Fallback.
 
 - Die ELENATA-Simulation prüft die vom Hauptskript selbst erzeugte einmalige Post-Boot-ALSA-Unit, das Hilfsskript, Pending und sichere Modi. SvxLink wird dabei nicht gestartet.
+- Sie prüft jeden DB0DAM-950-Pflichtregler einschließlich PCM 165/165, Headphone-Routing, AVC, BASS, DAP-/I2S-Signalweg und dass `asactl` erst nach erfolgreicher Konfiguration läuft.
 - Die Bootsimulation prüft die Deaktivierung von `vc4-kms-v3d,cma-512`, den Erhalt fremder Overlays und die Idempotenz.
 
 - Idempotente ELENATA-Bootkonfiguration.
