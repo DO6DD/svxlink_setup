@@ -33,6 +33,14 @@ Voraussetzungen: Debian-13-VM, bereits installiertes SvxLink `26.05.1`, gültige
 
 Erwartet und real bestätigt: unveränderter Quellstand und Releaseversion `26.05.1`; akzeptierter Buildstatus; kein CMake, kein Build und kein `make install`; vorhandenes `de_DE` und `en_US` ohne Neuinstallation, Download oder Entpacken; Deutsch für `SimplexLogic` und `RepeaterLogic`; kein automatischer Dienststart sowie Rückkehr zum Hauptmenü. Die Abschlussmeldung benennt dabei ausdrücklich den Build-Skip.
 
+### Raspberry Pi `we10-test` ohne ELENATA-Board
+
+- System: Raspberry Pi OS / Debian 13, aarch64; kein ELENATA-/Fe-Pi-Board angeschlossen.
+- Voraussetzungen: Der bisherige Buildordner `/root/svxlink/build` wurde für den Vollbuild entfernt oder verschoben, der Buildstatus unter `/var/lib/svxlink-setup/build-state` entfernt.
+- Tatsächlich bestätigt: vollständige Objektkompilierung im Buildlog, fortlaufende echte CMake-Prozentanzeige im Terminal, Installation, `svxlink --version` gleich `1.10.1@26.05.1`, erkannte Releaseversion `26.05.1`, gültiger Buildstatus, idempotente Bootkonfiguration ohne doppelte verwaltete Einträge und deaktiviertes `vc4-kms-v3d`.
+- `--check` lief ohne internen Shellfehler; die fehlende Karte `Audio` war ohne Zielhardware erwartbar.
+- Grenzen: Dieser Test bestätigt weder ELENATA-ALSA, Mixer, `asactl`, Aufnahme/Wiedergabe, GPIO, SQL, PTT noch Squelch.
+
 ### Gefundene und behobene Fehler
 
 - Rohe `runuser`-, `id`-, `grep`- und `logrotate`-Fehler im Prüfmodus unterdrückt.
@@ -72,7 +80,7 @@ Erwartet und real bestätigt: unveränderter Quellstand und Releaseversion `26.0
 
 ### `tests/simulate_root_backup_permissions.sh`
 
-- Prüft den Produktivstart ohne Root: Exitcode ungleich 0 sowie den Hinweis `sudo ./svxlink_setup.sh`.
+- Prüft eine schreibende Produktivaktion ohne Root: Exitcode ungleich 0 sowie den Hinweis `sudo ./svxlink_setup.sh`.
 - Prüft Root-Hinweis im Header und die Root-Ausnahme im expliziten Testmodus.
 - Prüft die Ermittlung von `SUDO_USER` und dessen Home über `getent`; ein direkter Root-Login verwendet definiert `root` und `/root`.
 - Prüft, dass das Produktionsskript keine internen `sudo`-Befehle enthält.
@@ -102,7 +110,7 @@ Erwartet und real bestätigt: unveränderter Quellstand und Releaseversion `26.0
 ### `tests/simulate_elenata.sh`
 
 - Zweck: sichere Funktionssimulation der Profil-4-Komponenten ohne Root. Der Test ist kein vollständiger Root-Installationslauf und keine Hardwarevalidierung.
-- Testlauf in Debian 13 VM `svxlink-test` auf Commit `8781d0b`: ohne `sudo` ausgeführt, alle Testfälle bestanden und die überwachten echten Dateien blieben unverändert.
+- Historischer Testlauf in Debian 13 VM `svxlink-test` auf Commit `8781d0b`: ohne `sudo` ausgeführt, alle damaligen Testfälle bestanden und die überwachten echten Dateien blieben unverändert.
 - ShellCheck wurde in dieser Debian-13-VM nicht durchgeführt, da das Programm nicht installiert war. ShellCheck wurde separat auf dem Entwicklungsrechner erfolgreich ausgeführt.
 - Hardwarevalidierung bleibt offen.
 - Der Test arbeitet ausschließlich in einem mit `mktemp -d` erzeugten Verzeichnis und entfernt dieses per `trap`.
@@ -134,12 +142,12 @@ Erwartet und real bestätigt: unveränderter Quellstand und Releaseversion `26.0
 #### ALSA-Simulation
 
 - Simuliert die Karte `Audio` und prüft die Verwendung der über `audio_card_number` ermittelten Kartennummer `2`.
-- Prüft vollständig: `amixer -c Audio sset "Capture Mux" LINE_IN`, `amixer -c Audio sset Capture 6,6 unmute`, `amixer -c Audio sset Capture 8,5 unmute`, `amixer -c Audio sset "Capture Attenuate Switch (-6dB)" on`, `amixer -c Audio sset PCM 166,166`, `amixer -c Audio sset Lineout 21,21 unmute`, `amixer -c Audio sset AVC off`, `amixer -c Audio sset "AVC Hard Limiter" off` und `amixer -c Audio sset Mic 0`.
+- Prüft die vollständige aktuelle DB0DAM-950-Pflichtreglerliste: Capture 6,6, PCM 165,165, Lineout 21,21, Headphone 120,120, Routing, Zero-Cross, AVC, BASS und DAP-/I2S-Signalweg. Ein Capture-Test mit abweichenden Werten prüft nur die bereits vorhandene interne Parametrierbarkeit und ist kein Installationsstandard.
 - Prüft `asactl store -f <temporäre-state-datei> 2` sowie das Anlegen der temporären ALSA-State-Datei.
 
 #### Fehler- und Sicherheitsfälle
 
-- Prüft fehlende Karte `Audio`, fehlenden Pflichtregler, fehlenden optionalen Regler, ungültigen Capture-Wert, nicht beschreibbare temporäre Bootdatei und fehlende `RepeaterLogic`-Sektion.
+- Prüft fehlende Karte `Audio`, fehlende Pflichtregler, ungültigen Capture-Wert, nicht beschreibbare temporäre Bootdatei und fehlende `RepeaterLogic`-Sektion. Innerhalb der DB0DAM-950-Referenzliste gibt es keine optionalen Regler.
 - Vor und nach dem Test werden SHA-256, Dateityp, Modus, UID, GID, Größe und Änderungszeit von `/boot/config.txt`, `/boot/firmware/config.txt`, `/etc/svxlink/svxlink.conf`, `/etc/default/svxlink` und `/etc/logrotate.d/svxlink` verglichen.
 - Mock-Aufrufe werden protokolliert. Im aktuellen Komponententest werden `amixer`, `asactl`, `chown`, `chmod` und `logrotate` aufgerufen; `aplay`, `arecord`, `systemctl`, `usermod` und `getent` werden nicht aufgerufen und gelten daher nicht als getestet.
 

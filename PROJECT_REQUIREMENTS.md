@@ -1,5 +1,14 @@
 # Projektanforderungen
 
+## Arbeitsorte, Nachweis und Dokumentation
+
+- Entwicklung, Codeänderungen, Simulationen, ShellCheck, Commits, Pushes und Branchpflege erfolgen ausschließlich im ThinkPad-Repository `~/codex/svxlink_setup`.
+- Die Debian-VM auf dem ThinkPad ist nur für reale Debian-Tests ohne Raspberry-Pi-Hardware bestimmt. Raspberry Pis und Relais-Systeme dienen ausschließlich für Boot-, ELENATA-, ALSA-, GPIO- und Betriebsprüfungen; ihre Ergebnisse werden anschließend im ThinkPad-Repository dokumentiert.
+- Bei jeder technischen, fachlichen oder testbezogenen Änderung sind `readme.md`, `PROJECT_REQUIREMENTS.md`, `STATUS.md`, `TESTING.md` und `CHANGELOG.md` auf notwendige Änderungen zu prüfen. Relevante Korrekturen gehören in denselben Arbeitsgang und Commit.
+- Neue Aussagen dürfen nicht nur ergänzt werden: falsche, veraltete, widersprüchliche oder missverständliche Aussagen sind zu entfernen, zu korrigieren oder ausdrücklich historisch zu markieren. Code, Tests und Dokumentation müssen übereinstimmen.
+- Neue ChatGPT-/Codex-Sitzungen lesen zuerst Repository, Branch, Arbeitsbaum und Dokumentation. Fehlt eine Information in Code oder Dokumentation, darf sie nicht geraten werden.
+- Testnachweise werden immer getrennt als statisch auf dem ThinkPad, simuliert auf dem ThinkPad, real in der Debian-VM, real auf Raspberry Pi ohne Zielhardware oder real auf Raspberry Pi mit ELENATA-/Fe-Pi-Hardware klassifiziert. Eine Simulation ist niemals Hardwarevalidierung.
+
 ## Zweck und Plattformen
 
 - Das Projekt bleibt ein einzelnes, einfach zu bedienendes Installationsscript.

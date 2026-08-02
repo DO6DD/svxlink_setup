@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Dokumentation an Code, Simulationen und bekannte VM-/Raspberry-Pi-Nachweise angeglichen; veraltete Branch-, Commit-, Mixer-, Debian-, Root- und Repositoryangaben bereinigt.
+
 - ELENATA verwendet jetzt den vollständigen DB0DAM-950-Mixerzustand mit Routing-, Headphone-, AVC-, BASS-, DAP-/I2S- und Zero-Cross-Reglern als Pflichtreglern; DB0VL-Pegel bleiben bewusst kein Standard.
 
 - CMake-Builds zeigen auf interaktiven Terminals echte, aus der Buildausgabe erkannte Fortschrittsprozente; das vollständige Buildprotokoll bleibt erhalten.
@@ -51,7 +53,7 @@
 - Hauptmenü, Installations-/Aktualisierungsuntermenü und Backup-Untermenü ergänzt; alle Profile 0 bis 4 bleiben erreichbar.
 - Simulation `tests/simulate_legacy_profiles.sh` für die historischen Profilzweige, Boot- und Moduleinträge, uSvxCard-GPIO sowie externe Treiberquellen ergänzt.
 - Die historischen Treiberquellen bleiben zunächst unpinned und bis zur Prüfung auf aktueller Raspberry-Pi-Hardware nicht hardwarevalidiert.
-- Produktivstart verbindlich auf Root mit `sudo ./svxlink_setup.sh` festgelegt; Testmodus bleibt rootlos.
+- Historisch: Frühere Root-Regel für Produktivaktionen. Aktuell sind `--help`, `--check`, `--show-config` und das Hauptmenü ohne Root nutzbar; nur schreibende Aktionen verlangen Root.
 - Quell- und Build-Benutzer werden über `SUDO_USER` und `getent` bestimmt; direkter Root-Login ist definiert.
 - Verzeichnisbackups kopieren statt den Quellordner zu verschieben; ein separater Helfer bleibt für atomaren Austausch zuständig.
 - Deutsche und englische Soundordner werden einzeln auf `svxlink:svxlink`, Verzeichnisse `0755` und reguläre Dateien `0644` normalisiert. Symbolziele werden nicht dereferenziert.

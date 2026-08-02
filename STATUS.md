@@ -1,47 +1,48 @@
 # Status
 
-- Aktueller Branch: `project-documentation`
-- Der CMake-Live-Fortschritt ist isoliert simuliert; ein realer Raspberry-Pi-Neubau steht noch aus.
-- Pi-Test ohne ELENATA-Board bestätigte Installation und Bootwerte; Fe-Pi-Audio, ALSA, Mixer und GPIO bleiben ohne Board nicht hardwarevalidiert.
-- Die vollständigen DB0DAM-950-Mixer-, AVC-, BASS- und Signalwegwerte sind als Konfigurationsreferenz hinterlegt; ihr Verhalten auf echter ELENATA-Hardware ist noch nicht durch diesen Projektstand validiert.
-- Aktueller Stand: realer Debian-13-VM-Update-Skip einschließlich Sound- und Sprachprüfung bestätigt.
-- Letzter real bestätigter Stand: `cb555b8`
+## Implementiert
 
-## Fertig
+- SvxLink wird bewusst aus dem offiziellen Upstream-Repository auf `master` gebaut; Buildstatus, Commit, Version, Plattform und Optionen steuern den Build-Skip.
+- `-D` schreibt ein geschütztes Debuglog; read-only Aufrufe und Hauptmenü funktionieren ohne Root, schreibende Aktionen verlangen Root erst vor der Änderung.
+- ELENATA verwaltet die Bootwerte idempotent, deaktiviert `vc4-kms-v3d`, behält feste GPIOD-Pins bei und richtet bei fehlender Karte `Audio` eine einmalige ALSA-Post-Boot-Konfiguration ein.
+- Die vollständigen DB0DAM-950-Mixer-, AVC-, BASS- und Signalwegwerte sind als Pflichtregler implementiert. DB0VL-Pegel sind nur stationsspezifisch und kein Standard.
 
-- Debian-13-VM-Basisinstallation einschließlich wiederholtem Installationslauf.
-- Read-only-Prüfmodus, Logging, Logrotate und RepeaterLogic-Basiskonfiguration.
-- `tests/simulate_elenata.sh` prüft Profil 4 als Funktionssimulation ohne Root und ausschließlich mit temporären Dateien aus `mktemp -d`.
-- Hash- und Metadatenvergleich bestätigte unveränderte überwachte Dateien unter `/boot` und `/etc`.
-- Bootkonfiguration, SvxLink-Konfiguration, GPIO-Zuordnung, ALSA-Aufrufe, Idempotenz und definierte Fehlerfälle sind simuliert geprüft.
-- Profil-4-Funktionssimulation zusätzlich direkt in der Debian-13-VM `svxlink-test` ohne `sudo` erfolgreich ausgeführt; alle Testfälle meldeten `PASS`.
-- ShellCheck war in der Debian-13-VM nicht installiert und wurde dort nicht ausgeführt; auf dem Entwicklungsrechner wurde ShellCheck erfolgreich ausgeführt.
-- Interaktives Startmenü sowie sichere Sprachverwaltung für Deutsch und Englisch sind per isolierter Simulation geprüft.
-- Der deutsche Anna-16k-Sprachsatz ist als geprüftes Archiv eingebettet; seine Lizenz- und Weiterverbreitungsfrage bleibt offen und wird nicht als Freigabe dargestellt.
-- Die historischen Profile 1 (ICS Pi-Repeater), 2 (uSvxCard) und 3 (WM8960 Audio-HAT) sind wieder im Installer auswählbar. `tests/simulate_legacy_profiles.sh` prüft ihre Konfigurationspfade ohne Root und ohne Downloads.
-- Der Produktivstart verlangt Root über `sudo ./svxlink_setup.sh`; `SVXLINK_TEST_MODE=true` bleibt ohne Root nutzbar.
-- Die Rechteverwaltung für deutsche und englische Sounds normalisiert ausschließlich `de_DE` beziehungsweise `en_US` auf `svxlink:svxlink`, Verzeichnisse `0755` und reguläre Dateien `0644`.
-- Real auf Debian 13 bestätigt: Update mit Rufzeichen `DM0DOS`, SvxLink `26.05.1`, gültigem persistenten Buildstatus, unverändertem Git-Commit und Profil 0.
-- Der Versionsparser verarbeitet `1.10.1@26.05.1` als Releaseversion `26.05.1`; Buildstatus und Quellstand wurden akzeptiert.
-- Der unveränderte Update-Lauf übersprang CMake, Kompilierung und Installation. Profil-, Sound- und Sprachprüfung liefen weiter.
-- `de_DE` und `en_US` wurden als vorhanden erkannt; es erfolgten weder Neuinstallation noch en_US-Download oder erneutes Entpacken. Rechte und Besitzerprüfung blieb idempotent.
-- Deutsch blieb für `SimplexLogic` und `RepeaterLogic` aktiv; SvxLink wurde nicht automatisch gestartet.
-- Die deutschen Abschlussmeldungen für Build-Skip und Profil 0 sowie die Rückkehr zum Hauptmenü wurden real bestätigt.
+## Statisch auf dem ThinkPad geprüft
 
-## Offen
+- Bash-Syntax, ShellCheck und `git diff --check` wurden für den Stand `66fa22a` erfolgreich ausgeführt.
 
-- Debian-12-VM-Test.
-- Raspberry Pi mit ELENATA-Profil 4 einschließlich Audio, GPIO und produktivem Dienststart.
-- Aktuelle Raspberry-Pi-OS- und Debian-13-Hardwaretests für ICS Pi-Repeater, uSvxCard und WM8960 Audio-HAT.
-- Echtes Installations- und Hörtest-Ergebnis für die eingebetteten deutschen und offiziellen englischen Sounds.
-- Externe deutsche RepeaterLogic.
+## Auf dem ThinkPad simuliert
 
-## Grenzen der Profil-4-Simulation
+- `simulate_elenata`: 125 erfolgreich, 0 Fehler.
+- `simulate_build_progress`: 6 erfolgreich, 0 Fehler.
+- `simulate_root_backup_permissions`: 41 erfolgreich, 0 Fehler.
+- `simulate_sound_management`: 44 erfolgreich, 0 Fehler.
+- `simulate_build_decision`: 15 erfolgreich, 0 Fehler.
+- `simulate_legacy_profiles`: 27 erfolgreich, 0 Fehler.
 
-- Der Test ist kein vollständiger Installationslauf.
-- Nicht aufgerufene Mocks im aktuellen Komponententest: `aplay`, `arecord`, `systemctl`, `usermod` und `getent`.
-- Nicht hardwarevalidiert: echter Raspberry Pi, ICS Pi-Repeater, uSvxCard, WM8960 Audio-HAT, ELENATA Wolfson / Fe-Pi Audio, Raspberry-Pi-Bootkonfiguration, reale Treiberinstallation der Profile 1–4, ALSA-Karte `Audio`, Mixercontrols, Aufnahme und Wiedergabe, GPIO PTT und Squelch, zweiter physischer Anschluss und produktiver Dienststart.
+## Real in der Debian-VM auf dem ThinkPad geprüft
 
-## Nächster Schritt
+- Debian-13-Installation, Profil 0, Update-/Build-Skip, Soundinstallation und Sprachaktivierung wurden bestätigt.
+- Die VM ist kein Raspberry-Pi- oder ELENATA-Hardwaretest.
 
-Raspberry Pi mit einem der fünf Hardwareprofile auf aktueller Zielhardware testen; ELENATA-Profil 4 bleibt prioritär.
+## Real auf Raspberry Pi ohne Zielhardware geprüft
+
+- Auf `we10-test` lief ein vollständiger Neubau im Pfad `/root/svxlink/build`, nachdem Buildordner und Buildstatus für den Test entfernt beziehungsweise gesichert wurden.
+- Die reale CMake-Prozentanzeige lief fortlaufend; die Objektkompilierung war im Buildlog sichtbar. Installation, `svxlink --version` (`1.10.1@26.05.1`), erkannte Releaseversion `26.05.1`, Buildstatus, idempotente Bootkonfiguration und `--check` ohne interne Shellfehler wurden bestätigt.
+- Es war kein ELENATA-Board vorhanden. Die fehlende Karte `Audio` war daher erwartet; ALSA, Mixer, Audio, GPIO, Squelch und PTT wurden nicht bestätigt.
+
+## Reale ELENATA-/Fe-Pi-Referenz
+
+- Die vollständigen DB0DAM-950-Controlwerte wurden von einer real laufenden Station ausgelesen und sind die Implementierungsreferenz.
+- Nicht bestätigt ist noch, dass eine frische Installation mit diesem Installer die Werte auf ELENATA-/Fe-Pi-Hardware vollständig setzt, mit `asactl` speichert und nach dem Neustart wiederherstellt.
+
+## Noch offen
+
+- Frische ELENATA-/Fe-Pi-Installation einschließlich Post-Boot-Unit, `Audio`-Karte, Mixer, Aufnahme, Wiedergabe, SQL, PTT und optionalem zweiten Anschluss.
+- Produktiver SvxLink-Betrieb mit Zielhardware.
+- Debian-12-VM sowie reale Tests der historischen Profile 1–3 auf aktueller Zielhardware.
+- Separate externe deutsche RepeaterLogic: `DEFAULT_LANG=de_DE` aktiviert nur Sprachansagen und integriert keine angepasste Tcl-Logic.
+
+## Nächster Test
+
+Eine frische ELENATA-/Fe-Pi-Installation mit dem aktuellen Installer ausführen, neu starten und danach Pending-Datei, Post-Boot-Log, `amixer -c Audio scontents`, `asactl`-Speicherung, Audio, SQL und PTT prüfen.

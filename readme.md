@@ -18,7 +18,7 @@ Before a build, the installer installs and verifies required tools including `cu
 
 Normal updates deliberately use the official SvxLink repository `https://github.com/sm0svx/svxlink.git` and its `master` branch, not automatically selected release tags. `/var/lib/svxlink-setup/build-state` retains the exact source commit and detected SvxLink version alongside platform, compiler and CMake option signature. Matching builds are skipped; forced reinstallations always rebuild. Technical command output is recorded in `/var/log/svxlink-setup/` while the terminal remains concise.
 
-During an interactive CMake build, recognized real CMake percentage lines are shown compactly as `[BUILD] <percent> %`; complete compiler output remains in the installation log. Noninteractive output has no progress control characters. This display has not yet been tested during a real Raspberry-Pi build.
+During an interactive CMake build, recognized real CMake percentage lines are shown compactly as `[BUILD] <percent> %`; complete compiler output remains in the installation log. Noninteractive output has no progress control characters. This was confirmed during a full Raspberry-Pi build without ELENATA hardware; it is not an ELENATA hardware validation.
 
 `-D` is an opt-in development and diagnostic mode. It keeps the same actions and menus (for example `-D`, `-D --check`, and `-D --install --yes`) but writes a mode-`0600` debug log to `/var/log/svxlink-setup/debug-<timestamp>.log`, whose path is printed at startup. The log contains xtrace entries with source file, line, function, command and prior exit status; script stdout/stderr and output from logged commands are captured as well. The installer does not process credentials, passwords, or private keys, but `-D` should still only be used for diagnostics because command arguments are traced.
 
@@ -32,13 +32,13 @@ The SvxLink setup script arose from the requirement to establish a simple soluti
 
 The script offers the following features:
 
-* Installing SvxLink on a Raspberry Pi or Debian “Bookworm”
+* Installing SvxLink on Raspberry Pi OS or Debian 12/13
 * Always installing the latest “master” branch
 * Setting up various HATs for connecting to repeaters including installation of all required drivers and setup of all needed GPIO ports (RPi only)
 * Getting all the content you need right from Git
 * Compiling from the most recent Trunks
 * Importing SvxLink sound files
-* Otimizing various system parameters (Rpi only)
+* Optimizing selected system parameters (Raspberry Pi only)
 * Messages shown optionally in English or German
 
 ## Supported HATs
@@ -63,7 +63,7 @@ One ELENATA setup run followed by a reboot is sufficient. If `Audio` is unavaila
 
 ## Installation
 
-We assume that we are dealing with a freshly installed Raspberry Pi with the current Raspbian / Raspberry Pi OS or Debian 11 “Bookworm” installed.
+The installer supports Debian 12, Debian 13 and current Raspberry-Pi-OS versions where the hardware and drivers are suitable.
 
 To run the script, please do the following:
 
@@ -72,7 +72,7 @@ To run the script, please do the following:
 $ sudo apt-get update 
 $ sudo apt-get upgrade
 $ sudo apt-get install git
-$ git clone https://github.com/do6np/svxlink_setup.git
+$ git clone https://github.com/DO6DD/svxlink_setup.git
 ```
 
 2. Change directory and make the script executable:
@@ -86,7 +86,7 @@ $ chmod +x svxlink_setup.sh
 $ sudo ./svxlink_setup.sh
 ```
 
-Or, if you realy like to write a debug log (development only):
+For a debug log (development only):
 ```
 $ sudo ./svxlink_setup.sh -D
 ```
@@ -141,7 +141,7 @@ Die Profile 1 bis 3 wurden aus der historischen Installer-Implementierung wieder
 
 ## Installation
 
-Das Skript geht davon aus, dass wir es mit einem frisch installierten Raspberry Pi oder PC zu tun haben, auf dem das aktuelle Raspbian oder Debian 11 "Bookworm" installiert ist. 
+Unterstützt werden Debian 12, Debian 13 sowie aktuelle Raspberry-Pi-OS-Versionen, soweit Hardware und Treiber passen.
 
 Die read-only Aufrufe `./svxlink_setup.sh --help`, `--check` und `--show-config` sowie das Hauptmenü funktionieren ohne Root. Erst schreibende Aktionen benötigen Root und nennen bei fehlenden Rechten die passende `sudo`-Variante. Bei einem Start über `sudo` werden Quell- und Build-Verzeichnisse über `SUDO_USER` im Home des aufrufenden Benutzers angelegt; ein direkter Root-Login verwendet bewusst `/root`. Der isolierte Testmodus benötigt keine Root-Rechte.
 
@@ -162,7 +162,7 @@ Um das Skript auszuführen, gehe bitte wie folgt vor:
 $ sudo apt-get update 
 $ sudo apt-get upgrade
 $ sudo apt-get install git
-$ git clone https://github.com/do6np/svxlink_setup.git
+$ git clone https://github.com/DO6DD/svxlink_setup.git
 ```
 
 2. Wechsle das Verzeichnis und mache das Skript ausführbar:
