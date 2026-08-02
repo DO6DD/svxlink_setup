@@ -16,7 +16,9 @@ Read-only status, help and configuration display work without root; write action
 
 Before a build, the installer installs and verifies required tools including `curl`, `tar`, `bzip2`, checksum, Git and build tools. Status output uses textual status labels; ANSI colors are used only on a terminal and are disabled by `NO_COLOR` and redirected output.
 
-Normal updates use `/var/lib/svxlink-setup/build-state` to compare the source commit, version, platform, compiler and CMake option signature. Matching builds are skipped; forced reinstallations always rebuild. Technical command output is recorded in `/var/log/svxlink-setup/` while the terminal remains concise.
+Normal updates deliberately use the official SvxLink repository `https://github.com/sm0svx/svxlink.git` and its `master` branch, not automatically selected release tags. `/var/lib/svxlink-setup/build-state` retains the exact source commit and detected SvxLink version alongside platform, compiler and CMake option signature. Matching builds are skipped; forced reinstallations always rebuild. Technical command output is recorded in `/var/log/svxlink-setup/` while the terminal remains concise.
+
+`-D` is an opt-in development and diagnostic mode. It keeps the same actions and menus (for example `-D`, `-D --check`, and `-D --install --yes`) but writes a mode-`0600` debug log to `/var/log/svxlink-setup/debug-<timestamp>.log`, whose path is printed at startup. The log contains xtrace entries with source file, line, function, command and prior exit status; script stdout/stderr and output from logged commands are captured as well. The installer does not process credentials, passwords, or private keys, but `-D` should still only be used for diagnostics because command arguments are traced.
 
 The normal installation installs the official English SvxLink sound release `25.05` and the bundled German Anna 16k archive. The English download uses HTTPS and the fixed SHA-256 `e79e61bec17a24fad093edfb21e7f8ca51af33b9590db954b4789271db2957dd`. German becomes the default language only after its archive has been verified and installed successfully; otherwise English remains active. The Anna archive provenance and checksum are documented in `resources/sounds/de_DE-anna-16k.SOURCE.md`. The project does not claim ownership of its recordings and does not claim that its unresolved licence and redistribution status is free.
 
@@ -48,6 +50,8 @@ The following Raspberry Pi HAT's are currently supported:
 4. ELENATA Wolfson / Fe-Pi Audio
 
 Profiles 1 to 3 were restored from the historical installer implementation. Their driver branches are not pinned and need current-hardware validation; the separate ELENATA profile 4 is component-simulated but not hardware-validated.
+
+For ELENATA, the installer manages the following boot settings in the effective `[all]` section: `dtparam=i2c0=on`, `dtparam=i2c1=on`, `dtparam=audio=off`, `dtoverlay=fe-pi-audio`, `dtoverlay=disable-bt`, `enable_uart=1`, `arm_boost=1`, `arm_64bit=1`, `gpu_mem=256`, `hdmi_force_hotplug=1`, `hdmi_group=2`, and `hdmi_mode=16`. It removes duplicate/conflicting managed entries in the preamble or `[all]`, preserves `[cm4]` and `[cm5]` unchanged, and creates a boot backup only when a change is necessary. ELENATA GPIOD assignments remain fixed: Rx1 26/Tx1 13, and optional Rx2 6/Tx2 5 on `gpiochip0`.
 
 ## Installation
 
@@ -133,7 +137,11 @@ Das Skript geht davon aus, dass wir es mit einem frisch installierten Raspberry 
 
 Die read-only Aufrufe `./svxlink_setup.sh --help`, `--check` und `--show-config` sowie das Hauptmenü funktionieren ohne Root. Erst schreibende Aktionen benötigen Root und nennen bei fehlenden Rechten die passende `sudo`-Variante. Bei einem Start über `sudo` werden Quell- und Build-Verzeichnisse über `SUDO_USER` im Home des aufrufenden Benutzers angelegt; ein direkter Root-Login verwendet bewusst `/root`. Der isolierte Testmodus benötigt keine Root-Rechte.
 
-Beim Update wird die SvxLink-Releaseversion normalisiert verglichen. Die in manchen Binärdateien sichtbare interne Kennung `1.10.1` ist nicht die Releaseversion: Aus `1.10.1@26.05.1` wird gezielt `26.05.1` ermittelt. Ist die Releaseversion nicht eindeutig feststellbar, wird aus Sicherheitsgründen neu gebaut.
+Beim Update wird bewusst das offizielle Repository `https://github.com/sm0svx/svxlink.git` auf dem Branch `master` verwendet, nicht automatisch ein Release-Tag ausgewählt. Der Buildstatus bewahrt den exakten Git-Commit und die erkannte SvxLink-Version. Die SvxLink-Releaseversion wird normalisiert verglichen. Die in manchen Binärdateien sichtbare interne Kennung `1.10.1` ist nicht die Releaseversion: Aus `1.10.1@26.05.1` wird gezielt `26.05.1` ermittelt. Ist die Releaseversion nicht eindeutig feststellbar, wird aus Sicherheitsgründen neu gebaut.
+
+`-D` ist ein optionaler Entwicklungs- und Diagnosemodus; `sudo ./svxlink_setup.sh -D`, `-D --check` und `-D --install --yes` verwenden dieselben Aktionen und Menüs wie ohne Debugmodus. Er schreibt ein Log mit Modus `0600` nach `/var/log/svxlink-setup/debug-<Zeitstempel>.log` und gibt den vollständigen Pfad beim Start aus. Enthalten sind Shell-Trace mit Quelldatei, Zeile, Funktion, Befehl und vorherigem Exitcode sowie Standardausgabe/-fehler und die Ausgaben protokollierter Befehle. Das Skript verarbeitet keine Zugangsdaten, Passwörter oder privaten Schlüssel; wegen der protokollierten Befehlsargumente bleibt `-D` dennoch ein Diagnosewerkzeug.
+
+Für ELENATA verwaltet das Skript im wirksamen Abschnitt `[all]` diese Bootwerte: `dtparam=i2c0=on`, `dtparam=i2c1=on`, `dtparam=audio=off`, `dtoverlay=fe-pi-audio`, `dtoverlay=disable-bt`, `enable_uart=1`, `arm_boost=1`, `arm_64bit=1`, `gpu_mem=256`, `hdmi_force_hotplug=1`, `hdmi_group=2` und `hdmi_mode=16`. Doppelte oder abweichende verwaltete Werte in Präambel beziehungsweise `[all]` werden bereinigt, `[cm4]` und `[cm5]` bleiben unverändert und ein Backup entsteht nur bei tatsächlicher Änderung. Die festen ELENATA-GPIOD-Werte bleiben unverändert: Rx1 26/Tx1 13 sowie optional Rx2 6/Tx2 5 jeweils auf `gpiochip0`.
 
 Normale Updates bauen nur bei geändertem oder ungültigem Stand; unveränderte Installationen werden schnell geprüft. Ein solcher Build-Skip wurde auf Debian 13 real bestätigt: CMake, Build und Installation werden übersprungen, während Profil-, Sound- und Sprachprüfungen weiterlaufen. Vollständige deutsche und englische Soundpakete werden nicht erneut installiert oder heruntergeladen. Profil 0 ist für Nicht-Raspberry-Pi-Systeme vorgesehen; die Profile 1–4 sind Raspberry-Pi-spezifisch.
 

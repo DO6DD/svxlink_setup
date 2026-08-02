@@ -93,6 +93,11 @@ ACTION_YES=false
 CALLSIGN_PROVIDED=false
 HARDWARE_PROFILE_PROVIDED=false
 INSTALL_LOG_FILE=""
+DEBUG_LOG_FILE=""
+DEBUG_MODE=false
+DEBUG_FD=""
+DEBUG_STDOUT_FD=""
+DEBUG_STDERR_FD=""
 BUILD_PERFORMED=false
 CMAKE_OPTIONS=(
     -DUSE_QT=OFF
@@ -175,6 +180,38 @@ on_error() {
     exit "${exit_code}"
 }
 trap on_error ERR
+
+start_debug_log() {
+    local timestamp debug_log_dir
+    ${DEBUG_MODE} || return 0
+    [[ -n ${DEBUG_LOG_FILE} ]] && return 0
+
+    debug_log_dir=${SVXLINK_DEBUG_LOG_DIR:-${INSTALL_LOG_DIR}}
+    install -d -m 0755 "${debug_log_dir}"
+    timestamp=$(date +%Y%m%d%H%M%S%N)
+    DEBUG_LOG_FILE="${debug_log_dir}/debug-${timestamp}.log"
+    : >"${DEBUG_LOG_FILE}"
+    chmod 0600 "${DEBUG_LOG_FILE}"
+    if [[ ${SVXLINK_TEST_MODE:-false} != true ]]; then chown root:root "${DEBUG_LOG_FILE}"; fi
+
+    # The script does not accept credentials, passwords, or private keys. Keep
+    # tracing opt-in nevertheless, because xtrace records command arguments.
+    exec {DEBUG_FD}>>"${DEBUG_LOG_FILE}"
+    exec {DEBUG_STDOUT_FD}>&1 {DEBUG_STDERR_FD}>&2
+    exec > >(tee -a "${DEBUG_LOG_FILE}" >&${DEBUG_STDOUT_FD}) \
+        2> >(tee -a "${DEBUG_LOG_FILE}" >&${DEBUG_STDERR_FD})
+    BASH_XTRACEFD=${DEBUG_FD}
+    PS4='+ ${BASH_SOURCE##*/}:${LINENO}:${FUNCNAME[0]:-main}: exit=${?}: '
+    export BASH_XTRACEFD PS4
+    set -x
+    print_info "Debuglog: ${DEBUG_LOG_FILE}"
+}
+
+append_install_output_to_debug_log() {
+    local offset=$1
+    ${DEBUG_MODE} || return 0
+    tail -c "+$((offset + 1))" "${INSTALL_LOG_FILE}" >>"${DEBUG_LOG_FILE}" 2>&1 || true
+}
 
 print_root_required_error() {
     local action=${1:-}
@@ -854,25 +891,87 @@ boot_line_needs_update() {
 }
 
 configure_elenata_boot() {
-    local line
+    local temporary desired_lines
     local -a required_lines=(
         "dtparam=i2c0=on"
         "dtparam=i2c1=on"
         "dtparam=audio=off"
         "dtoverlay=fe-pi-audio"
         "dtoverlay=disable-bt"
+        "enable_uart=1"
+        "arm_boost=1"
+        "arm_64bit=1"
+        "gpu_mem=256"
+        "hdmi_force_hotplug=1"
+        "hdmi_group=2"
+        "hdmi_mode=16"
     )
 
     ${IS_RASPBERRY_PI} || die "ELENATA is only supported on a Raspberry Pi."
-    for line in "${required_lines[@]}"; do
-        if ! boot_line_needs_update "${line}"; then
-            backup_file "${BOOT_CONFIG}"
-            break
-        fi
-    done
-    for line in "${required_lines[@]}"; do
-        ensure_boot_line "${line}" || return 1
-    done
+    # Do not bypass a deliberately read-only boot configuration when invoked as root.
+    (( 8#$(stat -c '%a' "${BOOT_CONFIG}") & 0222 )) || return 1
+    desired_lines=$(printf '%s\n' "${required_lines[@]}")
+    temporary=$(mktemp)
+    awk -v desired="${desired_lines}" '
+        function managed_key(line, value) {
+            if (line ~ /^dtparam=/) {
+                value = substr(line, length("dtparam=") + 1)
+                sub(/=.*/, "", value)
+                return "dtparam=" value
+            }
+            if (line ~ /^dtoverlay=/) {
+                value = substr(line, length("dtoverlay=") + 1)
+                sub(/,.*/, "", value)
+                return "dtoverlay=" value
+            }
+            if (line ~ /^[^#][^=]*=/) {
+                value = line
+                sub(/=.*/, "", value)
+                return value
+            }
+            return ""
+        }
+        BEGIN {
+            count = split(desired, lines, "\n")
+            for (i = 1; i <= count; i++) {
+                if (lines[i] != "") wanted[managed_key(lines[i])] = 1
+            }
+            section = ""
+        }
+        /^\[[^]]+\][[:space:]]*$/ {
+            section = substr($0, 2, length($0) - 2)
+            if (section == "all" && !written_all) {
+                print
+                print "# Inserted by SVXLINK Setup Script"
+                for (i = 1; i <= count; i++) if (lines[i] != "") print lines[i]
+                written_all = 1
+                next
+            }
+            print
+            next
+        }
+        section == "all" {
+            if ($0 == "# Inserted by SVXLINK Setup Script") next
+            if (managed_key($0) in wanted) next
+            print
+            next
+        }
+        section == "" && (managed_key($0) in wanted) { next }
+        { print }
+        END {
+            if (!written_all) {
+                if (NR > 0) print ""
+                print "[all]"
+                print "# Inserted by SVXLINK Setup Script"
+                for (i = 1; i <= count; i++) if (lines[i] != "") print lines[i]
+            }
+        }
+    ' "${BOOT_CONFIG}" >"${temporary}"
+    if ! cmp -s "${BOOT_CONFIG}" "${temporary}"; then
+        backup_file "${BOOT_CONFIG}"
+        install -m 0644 "${temporary}" "${BOOT_CONFIG}" || { rm -f "${temporary}"; return 1; }
+    fi
+    rm -f "${temporary}"
     return 0
 }
 
@@ -1083,11 +1182,14 @@ start_install_log() {
 }
 
 run_logged() {
-    local label=$1
+    local label=$1 offset status
     shift
     start_install_log || return 1
     print_info "${label} ..."
-    if "$@" >>"${INSTALL_LOG_FILE}" 2>&1; then
+    offset=$(wc -c <"${INSTALL_LOG_FILE}")
+    "$@" >>"${INSTALL_LOG_FILE}" 2>&1 && status=0 || status=$?
+    append_install_output_to_debug_log "${offset}"
+    if (( status == 0 )); then
         print_success "${label}"
         return 0
     fi
@@ -1245,8 +1347,9 @@ prepare_svxlink_source() {
     local before after
     if [[ -d ${SOURCE_DIR}/.git ]]; then
         before=$(source_commit)
-        run_logged 'SvxLink-Quellstand wird aktualisiert' runuser -u "${INSTALL_USER}" -- git -C "${SOURCE_DIR}" fetch --prune origin || return 1
-        run_logged 'SvxLink-Quellstand wird zusammengeführt' runuser -u "${INSTALL_USER}" -- git -C "${SOURCE_DIR}" pull --ff-only || return 1
+        run_logged 'SvxLink-master wird aktualisiert' runuser -u "${INSTALL_USER}" -- git -C "${SOURCE_DIR}" fetch --prune origin master || return 1
+        run_logged 'SvxLink-master wird ausgecheckt' runuser -u "${INSTALL_USER}" -- git -C "${SOURCE_DIR}" checkout --quiet master || return 1
+        run_logged 'SvxLink-master wird zusammengeführt' runuser -u "${INSTALL_USER}" -- git -C "${SOURCE_DIR}" merge --ff-only origin/master || return 1
         after=$(source_commit)
         if [[ ${before} == "${after}" ]]; then
             print_success 'SvxLink-Quellstand ist unverändert.'
@@ -1256,7 +1359,7 @@ prepare_svxlink_source() {
     elif [[ -e ${SOURCE_DIR} ]]; then
         die "Source directory exists but is not a SvxLink Git repository: ${SOURCE_DIR}"
     else
-        run_logged 'SvxLink-Quellcode wird geladen' runuser -u "${INSTALL_USER}" -- git clone "${SVXLINK_REPOSITORY}" "${SOURCE_DIR}" || return 1
+        run_logged 'SvxLink-master wird geladen' runuser -u "${INSTALL_USER}" -- git clone --branch master "${SVXLINK_REPOSITORY}" "${SOURCE_DIR}" || return 1
     fi
 }
 
@@ -1778,9 +1881,10 @@ main_menu() {
 
 show_help() {
     cat <<EOF
-Usage: sudo ./${SCRIPT_NAME} [--menu|--install|--check|--install-german-sounds|--install-english-sounds|--activate-german-sounds|--activate-english-sounds|--show-config] [--callsign=<name>] [--profile=0..4] [--yes]
+Usage: sudo ./${SCRIPT_NAME} [-D] [--menu|--install|--check|--install-german-sounds|--install-english-sounds|--activate-german-sounds|--activate-english-sounds|--show-config] [--callsign=<name>] [--profile=0..4] [--yes]
 
 Without an action parameter, the interactive menu is shown. Writing non-interactive actions require --yes.
+-D enables development diagnostics: shell traces with source lines, commands and prior exit codes are written to /var/log/svxlink-setup/debug-<timestamp>.log. Standard output and error from logged commands are appended there as well. Debug logs are mode 0600.
 EOF
 }
 
@@ -1792,6 +1896,7 @@ main() {
     fi
     for argument in "$@"; do
         case ${argument} in
+            -D) DEBUG_MODE=true ;;
             --yes) ACTION_YES=true ;;
             --callsign=*)
                 CALLSIGN=${argument#--callsign=}
@@ -1811,7 +1916,8 @@ main() {
             *) die "Unknown parameter: ${argument}. Use --help." ;;
         esac
     done
-    [[ -n ${action} ]] || die "An action parameter is required when options are supplied. Use --help."
+    start_debug_log
+    [[ -n ${action} ]] || { main_menu; return 0; }
     [[ ${action} != --help ]] || { show_help; return 0; }
     case ${action} in
         --menu) main_menu ;;

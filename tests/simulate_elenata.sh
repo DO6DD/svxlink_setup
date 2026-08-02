@@ -30,6 +30,13 @@ pass() { test_line '[ OK ]' "$*"; successes=$((successes + 1)); }
 expect() { [[ $1 == "$2" ]] && pass "$3" || fail "$3 (expected $2, got $1)"; }
 line() { grep -Fqx "$2" "$1" && pass "$3" || fail "$3"; }
 section_value() { expect "$(ini_value "${SVXLINK_CONFIG}" "$1" "$2")" "$3" "$1/$2"; }
+boot_all_line() {
+    awk -v line="$1" '
+        $0 == "[all]" { in_all=1; next }
+        /^\[/ { in_all=0 }
+        in_all && $0 == line { print; exit }
+    ' "${BOOT_CONFIG}"
+}
 
 snapshot() {
     local phase=$1 file out identifier
@@ -106,15 +113,19 @@ snapshot before
 detect_operating_system
 expect "${IS_RASPBERRY_PI}" true 'test Raspberry Pi detection'
 expect "${BOOT_CONFIG}" "${BOOT_CONFIG_FILE}" 'test boot path'
-printf '%s\n' '# vorhandene Kommentare' 'dtparam=spi=on' 'dtparam=i2c_arm=on' 'dtoverlay=vc4-kms-v3d' 'dtoverlay=dwc2' 'enable_uart=1' '#dtparam=audio=on' '#dtoverlay=ir-receiver' >"${BOOT_CONFIG}"
+printf '%s\n' '# vorhandene Kommentare' 'dtparam=spi=on' 'dtparam=i2c_arm=on' 'arm_64bit=0' '[all]' 'dtparam=audio=on' 'dtoverlay=fe-pi-audio' 'dtoverlay=fe-pi-audio' 'enable_uart=0' '[cm4]' 'dtoverlay=vc4-kms-v3d' 'arm_64bit=0' '[cm5]' 'dtoverlay=dwc2' 'gpu_mem=64' '#dtparam=audio=on' '#dtoverlay=ir-receiver' >"${BOOT_CONFIG}"
 configure_elenata_boot
 boot_hash=$(sha256sum "${BOOT_CONFIG}" | awk '{print $1}')
 backups=$(find "${SVXLINK_BACKUP_DIR}" -type f | wc -l)
 configure_elenata_boot
 expect "$(sha256sum "${BOOT_CONFIG}" | awk '{print $1}')" "${boot_hash}" 'idempotent boot configuration'
 expect "$(find "${SVXLINK_BACKUP_DIR}" -type f | wc -l)" "${backups}" 'no repeated boot backup'
-for value in 'dtparam=i2c0=on' 'dtparam=i2c1=on' 'dtparam=audio=off' 'dtoverlay=fe-pi-audio' 'dtoverlay=disable-bt'; do expect "$(grep -Fxc "${value}" "${BOOT_CONFIG}")" 1 "single ${value}"; done
-for value in 'dtparam=spi=on' 'dtparam=i2c_arm=on' 'dtoverlay=vc4-kms-v3d' 'dtoverlay=dwc2' 'enable_uart=1' '# vorhandene Kommentare' '#dtparam=audio=on' '#dtoverlay=ir-receiver'; do line "${BOOT_CONFIG}" "${value}" "preserve ${value}"; done
+for value in 'dtparam=i2c0=on' 'dtparam=i2c1=on' 'dtparam=audio=off' 'dtoverlay=fe-pi-audio' 'dtoverlay=disable-bt' 'enable_uart=1' 'arm_boost=1' 'arm_64bit=1' 'gpu_mem=256' 'hdmi_force_hotplug=1' 'hdmi_group=2' 'hdmi_mode=16'; do
+    expect "$(grep -Fxc "${value}" "${BOOT_CONFIG}")" 1 "single ${value}"
+    expect "$(boot_all_line "${value}")" "${value}" "${value} effective in [all]"
+done
+line "${BOOT_CONFIG}" '# Inserted by SVXLINK Setup Script' 'valid boot marker comment'
+for value in 'dtparam=spi=on' 'dtparam=i2c_arm=on' 'dtoverlay=vc4-kms-v3d' 'dtoverlay=dwc2' '[cm4]' 'arm_64bit=0' '[cm5]' 'gpu_mem=64' '# vorhandene Kommentare' '#dtparam=audio=on' '#dtoverlay=ir-receiver'; do line "${BOOT_CONFIG}" "${value}" "preserve ${value}"; done
 cp "${BOOT_CONFIG}" "${TEMP_DIR}/readonly-config.txt"
 sed -i '/dtparam=i2c1=on/d' "${TEMP_DIR}/readonly-config.txt"
 saved_boot_config=${BOOT_CONFIG}

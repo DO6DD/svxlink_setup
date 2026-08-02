@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- ELENATA-Bootwerte werden nun idempotent im wirksamen `[all]`-Abschnitt verwaltet; doppelte oder abweichende verwaltete Einträge werden bereinigt, `[cm4]` und `[cm5]` bleiben unverändert. Die festen GPIOD-Pins wurden nicht geändert.
+- Optionalen Diagnosemodus `-D` ergänzt. Er protokolliert Shell-Trace einschließlich Quellzeilen und Exitstatus sowie Ausgaben unter `/var/log/svxlink-setup/debug-<Zeitstempel>.log` (Modus `0600`), ohne normale Installationslogs zu ersetzen.
+- Der SvxLink-Quellpfad verwendet ausdrücklich weiter `https://github.com/sm0svx/svxlink.git` auf `master`; automatische Release-Tag-Auswahl wird nicht verwendet.
+
 - Realen Debian-13-Update-Skip nach Parser- und Soundkorrektur bestätigt: unveränderter Buildstatus überspringt CMake, Build und Installation; vorhandenes `en_US` verhindert erneut curl, vorhandenes `de_DE` eine Neuinstallation. Deutsche Abschlussmeldungen und die Rückkehr zum Hauptmenü wurden ebenfalls bestätigt.
 
 - Vorhandene vollständige deutsche und englische Soundpakete werden vor Archivprüfung oder Download erkannt, ausschließlich idempotent berechtigt und nicht erneut entpackt. Sichtbare Abschluss- und Soundmeldungen sind deutsch und unterscheiden Build, Skip und Sound-Teilfehler.

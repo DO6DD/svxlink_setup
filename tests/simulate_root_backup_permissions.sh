@@ -13,6 +13,7 @@ export SVXLINK_TEST_MODE=true
 export SVXLINK_CONFIG_FILE="${TEMP_DIR}/svxlink.conf"
 export SVXLINK_SOUNDS_DIR="${TEMP_DIR}/sounds"
 export SVXLINK_BACKUP_DIR="${TEMP_DIR}/backups"
+export SVXLINK_DEBUG_LOG_DIR="${TEMP_DIR}/debug"
 
 failures=0
 successes=0
@@ -59,6 +60,13 @@ start_output=$(printf '1\n1\n9\n' | main)
 run_checks() { printf 'CHECK_ACTION_CALLED\n'; }
 check_output=$(main --check)
 [[ ${check_output} == *CHECK_ACTION_CALLED* && ${check_output} != *'1) Installieren / aktualisieren'* ]] && pass 'non-interactive check bypasses menu' || fail 'non-interactive check bypasses menu'
+debug_check_output=$(main -D --check)
+[[ ${debug_check_output} == *CHECK_ACTION_CALLED* && ${debug_check_output} == *'Debuglog:'* ]] && pass '-D --check runs the check action and reports its log' || fail '-D --check runs the check action and reports its log'
+debug_menu_output=$(printf '9\n' | main -D)
+[[ ${debug_menu_output} == *'1) Installieren / aktualisieren'* && ${debug_menu_output} == *'Debuglog:'* ]] && pass '-D without action opens the normal menu' || fail '-D without action opens the normal menu'
+debug_log=$(find "${SVXLINK_DEBUG_LOG_DIR}" -type f -name 'debug-*.log' -print -quit)
+[[ -n ${debug_log} && -s ${debug_log} ]] && pass 'debug mode creates a trace log in the test path' || fail 'debug mode creates a trace log in the test path'
+[[ $(set -o | awk '$1 == "xtrace" { print $2 }') == off ]] && pass 'normal test shell has no shell tracing enabled' || fail 'normal test shell must not enable shell tracing'
 [[ $(NO_COLOR=1 print_success 'Farben aus') != *$'\033['* ]] && pass 'NO_COLOR disables ANSI output' || fail 'NO_COLOR disables ANSI output'
 rg -q 'bzip2 ca-certificates cmake curl g\+\+ gcc git' "${ROOT}/svxlink_setup.sh" && pass 'central package list contains curl and archive tools' || fail 'central package list contains curl and archive tools'
 export SVXLINK_TEST_MISSING_COMMANDS=curl

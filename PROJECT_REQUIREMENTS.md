@@ -17,6 +17,7 @@
 - Erforderliche Pakete dürfen gezielt mit `apt` installiert werden.
 - `curl`, `tar`, `bzip2`, `sha256sum`, Git- und Build-Werkzeuge gehören zu den vor dem Build geprüften Grundabhängigkeiten. Fehlende Werkzeuge müssen kontrolliert gemeldet werden.
 - Ein erfolgreicher SvxLink-Build speichert atomar `/var/lib/svxlink-setup/build-state`. Der normale Updatepfad überspringt den Build nur bei passendem Commit, Version, Plattform, Compiler und Buildoptionssignatur; Force baut immer neu.
+- SvxLink wird bewusst aus `https://github.com/sm0svx/svxlink.git` auf dem offiziellen Branch `master` bezogen. Der Installer wählt keine Release-Tags automatisch aus.
 
 ## Protokollierung
 
@@ -85,3 +86,4 @@
 - Die Installation nutzt `/usr/share/svxlink/sounds/de_DE` und `/usr/share/svxlink/sounds/en_US`. Jeweils nur der gewählte Sprachordner wird rekursiv auf `svxlink:svxlink`, Verzeichnisse auf `0755` und reguläre Dateien auf `0644` normalisiert; Symbolziele werden nicht dereferenziert.
 - Status- und Testausgaben verwenden textuelle Statuszeilen. ANSI-Farben werden nur bei Terminalausgabe verwendet; `NO_COLOR` und Umleitungen bleiben ANSI-frei.
 - Produktive Befehlsausgaben werden pro Lauf unter `/var/log/svxlink-setup/install-<Zeitstempel>.log` protokolliert; das Terminal zeigt Phasen und bei Fehlern einen Logauszug.
+- `-D` bleibt ein optionaler Diagnosemodus. Er schreibt zusätzlich `/var/log/svxlink-setup/debug-<Zeitstempel>.log` mit Modus `0600`, Shell-Trace und vollständiger Skriptausgabe; normale Installationslogs bleiben erhalten.

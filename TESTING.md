@@ -45,6 +45,8 @@ Erwartet und real bestätigt: unveränderter Quellstand und Releaseversion `26.0
 ## Simuliert validiert
 
 - Idempotente ELENATA-Bootkonfiguration.
+- ELENATA-Bootwerte werden im wirksamen `[all]` ergänzt, abweichende und doppelte verwaltete Werte werden ersetzt; `[cm4]` und `[cm5]` bleiben bytegleich erhalten.
+- `-D`, `-D --check` und der Debug-Menüstart werden isoliert geprüft. Debuglogs werden nur in temporären Testpfaden erzeugt; der Normalmodus aktiviert kein Shell-Tracing.
 - Erhalt fremder und kommentierter Bootzeilen.
 - Rx-/Tx-Sektionsbearbeitung ohne doppelte oder falsch zugeordnete SQL-/PTT-Werte.
 - Account-Setup für Raspberry Pi und Nicht-Raspberry-Pi.
@@ -104,8 +106,9 @@ Erwartet und real bestätigt: unveränderter Quellstand und Releaseversion `26.0
 
 #### Bootkonfiguration
 
-- Prüft `dtparam=i2c0=on`, `dtparam=i2c1=on`, `dtparam=audio=off`, `dtoverlay=fe-pi-audio` und `dtoverlay=disable-bt`.
+- Prüft die vollständigen `[all]`-Werte `dtparam=i2c0=on`, `dtparam=i2c1=on`, `dtparam=audio=off`, `dtoverlay=fe-pi-audio`, `dtoverlay=disable-bt`, `enable_uart=1`, `arm_boost=1`, `arm_64bit=1`, `gpu_mem=256`, `hdmi_force_hotplug=1`, `hdmi_group=2` und `hdmi_mode=16`.
 - Fremde aktive und kommentierte Zeilen bleiben erhalten.
+- `[cm4]` und `[cm5]` einschließlich ihrer abweichenden Werte bleiben unverändert; der verwaltete Marker ist ein gültiger Kommentar.
 - Der zweite Lauf ist byte-identisch und erzeugt keine zweite Sicherung ohne Änderungsbedarf.
 - Eine nicht beschreibbare temporäre Bootdatei erzeugt einen kontrollierten Fehler.
 
