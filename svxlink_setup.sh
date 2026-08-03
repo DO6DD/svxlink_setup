@@ -719,22 +719,46 @@ EOF
 
 install_packages() {
     local -a packages=(
-        bzip2 ca-certificates cmake curl g++ gcc git libasound2-dev libcurl4-openssl-dev
-        libgcrypt-dev libgpiod-dev libgsm1-dev libjsoncpp-dev libogg-dev
-        libopus-dev libopusenc-dev libpopt-dev libsigc++-2.0-dev libsndfile1-dev
-        libspeex-dev libspeexdsp-dev libssl-dev libvorbis-dev logrotate make
-        tcl-dev alsa-utils lsof tar
+        alsa-utils build-essential bzip2 ca-certificates cmake curl dnsutils doxygen g++ gcc git
+        gpiod graphviz groff gzip i2c-tools libasound2-dev libcurl4-openssl-dev libgcrypt20-dev
+        libgpiod-dev libgsm1-dev libi2c-dev libjsoncpp-dev libogg-dev libopus-dev libopusenc-dev
+        libpopt-dev librtlsdr-dev libsigc++-2.0-dev libsndfile1-dev libspeex-dev libspeexdsp-dev
+        libssl-dev libvorbis-dev logrotate lsof make mc rtl-sdr tar tcl-dev vorbis-tools
     )
 
+    resolve_package_alias packages libsigc++-dev libsigc++-2.0-dev
+    resolve_package_alias packages libgcrypt-dev libgcrypt20-dev
     if ${IS_RASPBERRY_PI}; then
-        packages+=(gpiod)
-    fi
-    if [[ ${HARDWARE_PROFILE} == 1 ]]; then
-        packages+=(i2c-tools)
+        package_has_candidate raspberrypi-kernel-headers || die 'Required Raspberry Pi package is unavailable: raspberrypi-kernel-headers.'
+        append_package_once packages raspberrypi-kernel-headers
     fi
 
     run_logged 'Paketquellen werden aktualisiert' apt-get update || return 1
     run_logged 'Grundabhängigkeiten werden installiert' env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "${packages[@]}"
+}
+
+package_has_candidate() {
+    apt-cache show "$1" 2>/dev/null | grep -q '^Package:'
+}
+
+append_package_once() {
+    local -n target=$1
+    local package=$2 existing
+    for existing in "${target[@]}"; do [[ ${existing} == "${package}" ]] && return 0; done
+    target+=("${package}")
+}
+
+resolve_package_alias() {
+    local target_name=$1
+    local requested=$2 fallback=$3
+    if package_has_candidate "${requested}"; then
+        append_package_once "${target_name}" "${requested}"
+    elif package_has_candidate "${fallback}"; then
+        log "Paket ${requested} wird durch ${fallback} erfüllt."
+        append_package_once "${target_name}" "${fallback}"
+    else
+        die "Required package or compatibility replacement is unavailable: ${requested} / ${fallback}."
+    fi
 }
 
 install_packages_for_profile() {

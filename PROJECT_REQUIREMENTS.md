@@ -29,6 +29,8 @@
 - `curl`, `tar`, `bzip2`, `sha256sum`, Git- und Build-Werkzeuge gehören zu den vor dem Build geprüften Grundabhängigkeiten. Fehlende Werkzeuge müssen kontrolliert gemeldet werden.
 - Ein erfolgreicher SvxLink-Build speichert atomar `/var/lib/svxlink-setup/build-state`. Der normale Updatepfad überspringt den Build nur bei passendem Commit, Version, Plattform, Compiler und Buildoptionssignatur; Force baut immer neu.
 - SvxLink wird bewusst aus `https://github.com/sm0svx/svxlink.git` auf dem offiziellen Branch `master` bezogen. Der Installer wählt keine Release-Tags automatisch aus.
+- Die allgemeine Paketinstallation enthält die vollständige angeforderte Build-, Audio-, SDR-, I²C-, Dokumentations- und Diagnoseausstattung. `raspberrypi-kernel-headers` wird ausschließlich auf erkanntem Raspberry Pi installiert.
+- Auf Debian 12 und Debian 13 ist `libgcrypt-dev` ein virtuelles Paket von `libgcrypt20-dev`; `libsigc++-dev` wird bei fehlendem konkreten Kandidaten ausdrücklich durch `libsigc++-2.0-dev` erfüllt und protokolliert. Fehlende Pi-Kernel-Header führen nur auf einem Raspberry Pi zu einem kontrollierten Fehler.
 
 ## Protokollierung
 

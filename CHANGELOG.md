@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Paketinstallation um die vollständige angeforderte Abhängigkeitsmenge erweitert; SigC++-/Gcrypt-Kompatibilitätsnamen werden explizit aufgelöst und Raspberry-Pi-Kernel-Header nur auf Raspberry Pi angefordert.
+
 - Dokumentation an Code, Simulationen und bekannte VM-/Raspberry-Pi-Nachweise angeglichen; veraltete Branch-, Commit-, Mixer-, Debian-, Root- und Repositoryangaben bereinigt.
 
 - ELENATA verwendet jetzt den vollständigen DB0DAM-950-Mixerzustand mit Routing-, Headphone-, AVC-, BASS-, DAP-/I2S- und Zero-Cross-Reglern als Pflichtreglern; DB0VL-Pegel bleiben bewusst kein Standard.

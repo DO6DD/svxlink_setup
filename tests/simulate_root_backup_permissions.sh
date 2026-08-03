@@ -68,7 +68,11 @@ debug_log=$(find "${SVXLINK_DEBUG_LOG_DIR}" -type f -name 'debug-*.log' -print -
 [[ -n ${debug_log} && -s ${debug_log} ]] && pass 'debug mode creates a trace log in the test path' || fail 'debug mode creates a trace log in the test path'
 [[ $(set -o | awk '$1 == "xtrace" { print $2 }') == off ]] && pass 'normal test shell has no shell tracing enabled' || fail 'normal test shell must not enable shell tracing'
 [[ $(NO_COLOR=1 print_success 'Farben aus') != *$'\033['* ]] && pass 'NO_COLOR disables ANSI output' || fail 'NO_COLOR disables ANSI output'
-rg -q 'bzip2 ca-certificates cmake curl g\+\+ gcc git' "${ROOT}/svxlink_setup.sh" && pass 'central package list contains curl and archive tools' || fail 'central package list contains curl and archive tools'
+if rg -q 'bzip2.*ca-certificates.*cmake.*curl.*g\+\+.*gcc.*git' "${ROOT}/svxlink_setup.sh"; then
+    pass 'central package list contains curl and archive tools'
+else
+    fail 'central package list contains curl and archive tools'
+fi
 export SVXLINK_TEST_MISSING_COMMANDS=curl
 if require_base_tools >/dev/null 2>&1; then fail 'missing base dependency must prevent build prerequisites'; else pass 'missing base dependency prevents build prerequisites'; fi
 unset SVXLINK_TEST_MISSING_COMMANDS
