@@ -123,6 +123,9 @@ ACTIVITY_PID=""
 ACTIVE_COMMAND_PID=""
 BUILD_PERFORMED=false
 ELENATA_ALSA_CARD_AVAILABLE=false
+SVXLINK_SERVICE_WAS_PRESENT=false
+SVXLINK_SERVICE_WAS_ENABLED=false
+SVXLINK_SERVICE_WAS_ACTIVE=false
 CMAKE_OPTIONS=(
     -DUSE_QT=OFF
     -DCMAKE_INSTALL_PREFIX=/usr
@@ -1153,14 +1156,27 @@ install_elenata_alsa_runtime() {
 set -Eeuo pipefail
 note() { if [[ -n ${ELENATA_ALSA_LOG_FILE:-} ]]; then printf '%s %s\n' "$(date -Is)" "$1" >>"${ELENATA_ALSA_LOG_FILE}"; elif declare -F log >/dev/null; then log "$1"; else printf '%s\n' "$1"; fi; }
 card_number() { if declare -F audio_card_number >/dev/null; then audio_card_number; else awk '/^[[:space:]]*[0-9]+[[:space:]]+\[Audio\]/{gsub(/^[[:space:]]+/, "", $0); print $1; exit}' /proc/asound/cards 2>/dev/null || true; fi; }
-control_exists() { amixer -c Audio scontrols 2>/dev/null | grep -Fq "'$1'"; }
+control_exists() { local controls; controls=$(amixer -c Audio scontrols 2>/dev/null) || return 1; grep -Fq "'$1'" <<<"${controls}"; }
 required() { local control=$1; shift; control_exists "${control}" || { note "Required ALSA control is unavailable: ${control}"; return 1; }; amixer -c Audio sset "${control}" "$@" || { note "Could not set required ALSA control: ${control}"; return 1; }; note "ALSA control configured: ${control}"; }
 optional() { local control=$1 value=$2; if control_exists "${control}"; then amixer -c Audio sset "${control}" "${value}" || note "Could not set optional ALSA control: ${control}"; else note "Optional ALSA control is unavailable: ${control}"; fi; }
 apply() { local card; command -v amixer >/dev/null 2>&1 || { note 'Required command is unavailable: amixer'; return 1; }; command -v asactl >/dev/null 2>&1 || { note 'Required command is unavailable: asactl'; return 1; }; card=$(card_number); [[ -n ${card} ]] || return 2; required Headphone 120,120 unmute && required 'Headphone Mux' LINE_IN && required 'Headphone Playback ZC' on && required PCM 165,165 && required Lineout 21,21 unmute && required Mic 0 && required Capture "${CAPTURE_LEFT:-6},${CAPTURE_RIGHT:-6}" unmute && required 'Capture Attenuate Switch (-6dB)' on && required 'Capture Mux' LINE_IN && required 'Capture ZC' on && required AVC off && required 'AVC Hard Limiter' off && required 'AVC Integrator Response' 0 && required 'AVC Max Gain' 0 && required 'AVC Threshold' 0 && required 'BASS 0' 0 && required 'BASS 1' 0 && required 'BASS 2' 0 && required 'BASS 3' 0 && required 'BASS 4' 0 && required 'DAP MIX Mux' ADC && required 'DAP Main channel' 0 && required 'DAP Mix channel' 0 && required 'DAP Mux' ADC && required 'Digital Input Mux' I2S || return 1; if [[ -n ${ALSA_STATE_FILE:-} ]]; then asactl store -f "${ALSA_STATE_FILE}" "${card}"; else asactl store "${card}"; fi || { note "Could not store ALSA state for card ${card}"; return 1; }; note "ALSA state stored for card ${card}"; }
 [[ ${ELENATA_ALSA_LIBRARY:-false} == true ]] && return 0
 install -d -m 0755 "$(dirname "${ELENATA_ALSA_LOG_FILE}")"; : >"${ELENATA_ALSA_LOG_FILE}"; chmod 0600 "${ELENATA_ALSA_LOG_FILE}"; chown root:root "${ELENATA_ALSA_LOG_FILE}" 2>/dev/null || true
-note 'Post-boot ELENATA ALSA configuration started; timeout 90s.'
-for attempt in $(seq 1 45); do card=$(card_number); [[ -z ${card} ]] || break; sleep 2; done
+timeout_seconds=${ELENATA_ALSA_TIMEOUT_SECONDS:-90}
+poll_interval=${ELENATA_ALSA_POLL_INTERVAL_SECONDS:-2}
+[[ ${timeout_seconds} =~ ^[1-9][0-9]*$ && ${poll_interval} =~ ^[1-9][0-9]*$ ]] || { note 'RESULT: failure; invalid post-boot timeout configuration.'; exit 1; }
+note "Post-boot ELENATA ALSA configuration started; timeout ${timeout_seconds}s."
+deadline=$((SECONDS + timeout_seconds))
+attempt=0
+card=''
+while :; do
+    attempt=$((attempt + 1))
+    card=$(card_number)
+    [[ -n ${card} ]] && break
+    remaining=$((deadline - SECONDS))
+    (( remaining > 0 )) || break
+    (( remaining < poll_interval )) && sleep "${remaining}" || sleep "${poll_interval}"
+done
 note "ALSA card scan after ${attempt} attempt(s): ${card:-Audio not found}"
 [[ -n ${card} ]] || { note 'RESULT: failure; Audio did not appear before timeout.'; exit 1; }
 apply || { note 'RESULT: failure; ALSA configuration was not completed.'; exit 1; }
@@ -1714,10 +1730,31 @@ EOF
     fi
 }
 
-enable_svxlink_service() {
+record_svxlink_service_state() {
+    SVXLINK_SERVICE_WAS_PRESENT=false
+    SVXLINK_SERVICE_WAS_ENABLED=false
+    SVXLINK_SERVICE_WAS_ACTIVE=false
+    if systemctl cat svxlink.service >/dev/null 2>&1; then
+        SVXLINK_SERVICE_WAS_PRESENT=true
+        systemctl is-enabled --quiet svxlink.service && SVXLINK_SERVICE_WAS_ENABLED=true
+        systemctl is-active --quiet svxlink.service && SVXLINK_SERVICE_WAS_ACTIVE=true
+    fi
+    return 0
+}
+
+finalize_svxlink_service() {
     run_logged 'Systemd-Konfiguration wird neu geladen' systemctl daemon-reload || return 1
     systemctl cat svxlink.service >/dev/null 2>&1 || die "SvxLink systemd service was not installed."
-    run_logged 'SvxLink-Dienst wird aktiviert' systemctl enable svxlink.service
+    if ! ${SVXLINK_SERVICE_WAS_PRESENT}; then
+        run_logged 'SvxLink-Dienst bleibt deaktiviert' systemctl disable --now svxlink.service || return 1
+        print_info 'SvxLink bleibt deaktiviert und wurde nicht gestartet. Nach erfolgreicher Hardwareprüfung kann der Dienst aktiviert und gestartet werden.'
+    elif ${SVXLINK_SERVICE_WAS_ENABLED} && ${SVXLINK_SERVICE_WAS_ACTIVE}; then
+        print_info 'Der bereits aktivierte und laufende SvxLink-Dienst bleibt unverändert.'
+    elif ${SVXLINK_SERVICE_WAS_ENABLED}; then
+        print_info 'Der bereits aktivierte SvxLink-Dienst bleibt unverändert und wurde nicht gestartet.'
+    else
+        print_info 'Der vorhandene deaktivierte SvxLink-Dienst bleibt unverändert und wurde nicht gestartet.'
+    fi
 }
 
 check_item() {
@@ -1973,6 +2010,7 @@ run_installation() {
         log "Installation abgebrochen."
         return 0
     fi
+    record_svxlink_service_state
     install_packages
     require_base_tools || die "Grundabhängigkeiten fehlen; SvxLink-Build wurde nicht gestartet."
     print_info 'Installation wird vorbereitet ...'
@@ -2012,8 +2050,7 @@ run_installation() {
     else
         print_warning 'Die deutschen Sounds sind nicht verfügbar; Englisch bleibt aktiv.'
     fi
-    print_info 'SvxLink wurde nicht automatisch gestartet.'
-    enable_svxlink_service
+    finalize_svxlink_service
     if [[ ${HARDWARE_PROFILE} == 0 ]]; then
         print_info 'Die Grundinstallation ist abgeschlossen.'
         print_info 'Profil 0 erstellt keine produktive Audio-, PTT- oder Squelch-Konfiguration.'

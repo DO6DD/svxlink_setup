@@ -237,12 +237,14 @@ audio_present=false
 HARDWARE_PROFILE=4
 configure_hardware_profile
 [[ -f ${ELENATA_ALSA_PENDING_FILE} && -f ${ELENATA_ALSA_UNIT_FILE} && -f ${ELENATA_ALSA_HELPER_FILE} && -f ${ELENATA_ALSA_CONFIG_FILE} ]] && pass 'missing Audio creates all post-boot runtime files' || fail 'missing Audio creates post-boot runtime files'
+mock_has systemctl enable svxlink-setup-elenata-alsa.service && pass 'ELENATA post-boot service remains enabled' || fail 'ELENATA post-boot service must remain enabled'
 [[ $(stat -c '%a' "${ELENATA_ALSA_HELPER_FILE}") == 755 && $(stat -c '%a' "${ELENATA_ALSA_CONFIG_FILE}") == 600 ]] && pass 'post-boot runtime files have safe modes' || fail 'post-boot runtime file modes'
 grep -Fq 'TimeoutStartSec=120' "${ELENATA_ALSA_UNIT_FILE}" && ! grep -Fq 'svxlink.service' "${ELENATA_ALSA_UNIT_FILE}" && pass 'post-boot unit is bounded and does not start SvxLink' || fail 'post-boot unit boundaries'
 grep -Fqx "EnvironmentFile=${ELENATA_ALSA_CONFIG_FILE}" "${ELENATA_ALSA_UNIT_FILE}" && pass 'post-boot unit loads the generated environment file' || fail 'post-boot unit environment file'
 if grep -Fq 'ELENATA_ALSA_CONFIG_FILE' "${ELENATA_ALSA_HELPER_FILE}"; then fail 'post-boot helper must not load a second configuration file'; else pass 'post-boot helper relies on systemd environment only'; fi
 grep -Fqx 'CAPTURE_LEFT=8' "${ELENATA_ALSA_CONFIG_FILE}" && grep -Fqx 'CAPTURE_RIGHT=5' "${ELENATA_ALSA_CONFIG_FILE}" && pass 'environment file contains all helper mixer variables' || fail 'environment file mixer variables'
-grep -Fq "for attempt in \$(seq 1 45)" "${ELENATA_ALSA_HELPER_FILE}" && grep -Fq 'sleep 2' "${ELENATA_ALSA_HELPER_FILE}" && grep -Fq 'timeout 90s' "${ELENATA_ALSA_HELPER_FILE}" && pass 'post-boot card timeout remains unchanged' || fail 'post-boot card timeout'
+# shellcheck disable=SC2016
+grep -Fq 'timeout_seconds=${ELENATA_ALSA_TIMEOUT_SECONDS:-90}' "${ELENATA_ALSA_HELPER_FILE}" && grep -Fq 'deadline=$((SECONDS + timeout_seconds))' "${ELENATA_ALSA_HELPER_FILE}" && ! grep -Fq 'for attempt in $(seq' "${ELENATA_ALSA_HELPER_FILE}" && grep -Fq '(( remaining > 0 )) || break' "${ELENATA_ALSA_HELPER_FILE}" && pass 'post-boot card timeout uses a 90-second deadline without a final sleep' || fail 'post-boot card timeout'
 
 set -a
 # shellcheck disable=SC1090
@@ -251,16 +253,39 @@ set +a
 timeout_bin="${TEMP_DIR}/timeout-bin"
 mkdir -p "${timeout_bin}"
 printf '%s\n' '#!/usr/bin/env bash' 'exit 0' >"${timeout_bin}/awk"
-printf '%s\n' '#!/usr/bin/env bash' "printf '1\\n'" >"${timeout_bin}/seq"
-printf '%s\n' '#!/usr/bin/env bash' 'exit 0' >"${timeout_bin}/sleep"
-command chmod 0755 "${timeout_bin}/awk" "${timeout_bin}/seq" "${timeout_bin}/sleep"
+# shellcheck disable=SC2016
+printf '%s\n' '#!/usr/bin/env bash' 'printf "%s\n" "$1" >>"${ELENATA_TEST_SLEEP_LOG}"' 'exec /bin/sleep "$@"' >"${timeout_bin}/sleep"
+command chmod 0755 "${timeout_bin}/awk" "${timeout_bin}/sleep"
 timeout_pending="${TEMP_DIR}/state/timeout.pending"
 timeout_log="${TEMP_DIR}/logs/timeout.log"
+timeout_sleep_log="${TEMP_DIR}/logs/timeout-sleeps.log"
 : >"${timeout_pending}"
-if env PATH="${timeout_bin}:${PATH}" ELENATA_ALSA_PENDING_FILE="${timeout_pending}" ELENATA_ALSA_LOG_FILE="${timeout_log}" CAPTURE_LEFT="${CAPTURE_LEFT}" CAPTURE_RIGHT="${CAPTURE_RIGHT}" "${ELENATA_ALSA_HELPER_FILE}" >"${TEMP_DIR}/timeout.out" 2>&1; then
+timeout_start=$(date +%s)
+if env PATH="${timeout_bin}:${PATH}" ELENATA_ALSA_TIMEOUT_SECONDS=1 ELENATA_ALSA_POLL_INTERVAL_SECONDS=1 ELENATA_TEST_SLEEP_LOG="${timeout_sleep_log}" ELENATA_ALSA_PENDING_FILE="${timeout_pending}" ELENATA_ALSA_LOG_FILE="${timeout_log}" CAPTURE_LEFT="${CAPTURE_LEFT}" CAPTURE_RIGHT="${CAPTURE_RIGHT}" "${ELENATA_ALSA_HELPER_FILE}" >"${TEMP_DIR}/timeout.out" 2>&1; then
     fail 'missing Audio must fail after the post-boot timeout'
 else
-    grep -Fq 'Audio did not appear before timeout' "${timeout_log}" && [[ -e ${timeout_pending} ]] && ! grep -Fq 'unbound variable' "${TEMP_DIR}/timeout.out" && pass 'post-boot helper starts without unbound variable; missing Audio fails after timeout and keeps pending marker' || fail 'missing Audio timeout handling'
+    timeout_elapsed=$(( $(date +%s) - timeout_start ))
+    grep -Fq 'Audio did not appear before timeout' "${timeout_log}" && [[ -e ${timeout_pending} ]] && [[ ${timeout_elapsed} -ge 1 && ${timeout_elapsed} -le 2 ]] && [[ $(wc -l <"${timeout_sleep_log}") == 1 ]] && ! grep -Fq 'unbound variable' "${TEMP_DIR}/timeout.out" && pass 'post-boot timeout follows deadline, has no final sleep, and keeps pending marker' || fail 'missing Audio timeout handling'
+fi
+success_bin="${TEMP_DIR}/success-bin"
+mkdir -p "${success_bin}"
+success_counter="${TEMP_DIR}/success-card-count"
+printf '0\n' >"${success_counter}"
+# shellcheck disable=SC2016
+printf '%s\n' '#!/usr/bin/env bash' 'count=$(<"${ELENATA_TEST_CARD_COUNTER}")' 'count=$((count + 1))' 'printf "%s\n" "${count}" >"${ELENATA_TEST_CARD_COUNTER}"' '(( count >= 3 )) && printf "2\n"' >"${success_bin}/awk"
+# shellcheck disable=SC2016
+printf '%s\n' '#!/usr/bin/env bash' 'if [[ $* == *scontrols* ]]; then for control in Headphone "Headphone Mux" "Headphone Playback ZC" PCM Lineout Mic Capture "Capture Attenuate Switch (-6dB)" "Capture Mux" "Capture ZC" AVC "AVC Hard Limiter" "AVC Integrator Response" "AVC Max Gain" "AVC Threshold" "BASS 0" "BASS 1" "BASS 2" "BASS 3" "BASS 4" "DAP MIX Mux" "DAP Main channel" "DAP Mix channel" "DAP Mux" "Digital Input Mux"; do printf "Simple mixer control '\''%s'\'',0\n" "${control}"; done; fi' >"${success_bin}/amixer"
+printf '%s\n' '#!/usr/bin/env bash' 'exit 0' >"${success_bin}/asactl"
+command chmod 0755 "${success_bin}/awk" "${success_bin}/amixer" "${success_bin}/asactl"
+success_pending="${TEMP_DIR}/state/success.pending"
+success_log="${TEMP_DIR}/logs/success.log"
+: >"${success_pending}"
+success_status=0
+env PATH="${success_bin}:${PATH}" ELENATA_ALSA_TIMEOUT_SECONDS=2 ELENATA_ALSA_POLL_INTERVAL_SECONDS=1 ELENATA_TEST_CARD_COUNTER="${success_counter}" ELENATA_ALSA_PENDING_FILE="${success_pending}" ELENATA_ALSA_LOG_FILE="${success_log}" ALSA_STATE_FILE="${TEMP_DIR}/helper-asound.state" CAPTURE_LEFT="${CAPTURE_LEFT}" CAPTURE_RIGHT="${CAPTURE_RIGHT}" "${ELENATA_ALSA_HELPER_FILE}" >"${TEMP_DIR}/success.out" 2>&1 || success_status=$?
+if [[ ${success_status} == 0 && $(<"${success_counter}") -ge 3 && ! -e ${success_pending} ]] && grep -Fq 'ALSA card scan after 3 attempt(s): 2' "${success_log}"; then
+    pass 'Audio appearing at the deadline is configured and clears pending marker'
+else
+    fail 'Audio appearing at the deadline must succeed'
 fi
 audio_present=true
 configure_hardware_profile
