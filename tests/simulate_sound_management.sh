@@ -132,6 +132,30 @@ printf x >"${TEMP_DIR}/escaping-link/sounds/de_DE/Core/online.wav"
 ln -s ../../outside.wav "${TEMP_DIR}/escaping-link/sounds/de_DE/escape.wav"
 tar -cjf "${TEMP_DIR}/escaping-link.tar.bz2" -C "${TEMP_DIR}/escaping-link" sounds
 if sound_archive_is_safe "${TEMP_DIR}/escaping-link.tar.bz2" sounds/de_DE; then fail 'archive link escaping expected root must be rejected'; else pass 'archive rejects symbolic link escaping expected root'; fi
+mkdir -p "${TEMP_DIR}/english-links/en_US-heather-16k/Core" "${TEMP_DIR}/english-links/en_US-heather-16k/EchoLink" "${TEMP_DIR}/english-links/en_US-heather-16k/Links with spaces"
+printf x >"${TEMP_DIR}/english-links/en_US-heather-16k/Core/repeater.wav"
+printf x >"${TEMP_DIR}/english-links/en_US-heather-16k/Core/Datei #9.wav"
+ln -s ../Core/repeater.wav "${TEMP_DIR}/english-links/en_US-heather-16k/EchoLink/repeater.wav"
+ln -s ../EchoLink/repeater.wav "${TEMP_DIR}/english-links/en_US-heather-16k/Links with spaces/verschachtelt #9.wav"
+ln -s '../Core/Datei #9.wav' "${TEMP_DIR}/english-links/en_US-heather-16k/EchoLink/Link mit Leerzeichen #.wav"
+ln "${TEMP_DIR}/english-links/en_US-heather-16k/Core/repeater.wav" "${TEMP_DIR}/english-links/en_US-heather-16k/EchoLink/repeater-hard.wav"
+tar -cjf "${TEMP_DIR}/english-links.tar.bz2" -C "${TEMP_DIR}/english-links" en_US-heather-16k
+sound_archive_is_safe "${TEMP_DIR}/english-links.tar.bz2" en_US-heather-16k && pass 'English archive accepts internal relative, nested, special-name, and hard links' || fail 'internal English archive links must be accepted'
+mkdir -p "${TEMP_DIR}/absolute-link/en_US-heather-16k"
+ln -s /etc/passwd "${TEMP_DIR}/absolute-link/en_US-heather-16k/absolute.wav"
+tar -cjf "${TEMP_DIR}/absolute-link.tar.bz2" -C "${TEMP_DIR}/absolute-link" en_US-heather-16k
+if sound_archive_is_safe "${TEMP_DIR}/absolute-link.tar.bz2" en_US-heather-16k; then fail 'absolute symbolic link must be rejected'; else pass 'archive rejects absolute symbolic link'; fi
+mkdir -p "${TEMP_DIR}/outside-link/en_US-heather-16k/EchoLink"
+ln -s ../../outside.wav "${TEMP_DIR}/outside-link/en_US-heather-16k/EchoLink/outside.wav"
+tar -cjf "${TEMP_DIR}/outside-link.tar.bz2" -C "${TEMP_DIR}/outside-link" en_US-heather-16k
+if sound_archive_is_safe "${TEMP_DIR}/outside-link.tar.bz2" en_US-heather-16k; then fail 'escaping symbolic link must be rejected'; else pass 'archive rejects escaping symbolic link'; fi
+mkdir -p "${TEMP_DIR}/outside-hardlink/en_US-heather-16k/EchoLink"
+printf x >"${TEMP_DIR}/outside-hardlink/outside.wav"
+ln "${TEMP_DIR}/outside-hardlink/outside.wav" "${TEMP_DIR}/outside-hardlink/en_US-heather-16k/EchoLink/outside-hard.wav"
+tar -cjf "${TEMP_DIR}/outside-hardlink.tar.bz2" -C "${TEMP_DIR}/outside-hardlink" en_US-heather-16k outside.wav
+if sound_archive_is_safe "${TEMP_DIR}/outside-hardlink.tar.bz2" en_US-heather-16k; then fail 'outside hard link must be rejected'; else pass 'archive rejects hard link outside expected root'; fi
+archive_hardlink_target_is_safe 'en_US-heather-16k/Core/repeater.wav' en_US-heather-16k && pass 'hard link target within expected root is accepted' || fail 'internal hard link target must be accepted'
+if archive_hardlink_target_is_safe outside.wav en_US-heather-16k; then fail 'hard link target outside expected root must be rejected'; else pass 'hard link target outside expected root is rejected'; fi
 
 require_root() { :; }
 snapshot_production_paths before

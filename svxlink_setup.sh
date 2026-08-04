@@ -506,8 +506,50 @@ sound_wav_count() {
     find "${directory}" -type f -name '*.wav' -printf '.' 2>/dev/null | wc -c
 }
 
+normalize_archive_path() {
+    local path=$1 component joined last_index
+    local -a components normalized
+    [[ ${path} != /* ]] || return 1
+    IFS=/ read -r -a components <<<"${path}"
+    for component in "${components[@]}"; do
+        case ${component} in
+            ''|.) ;;
+            ..)
+                ((${#normalized[@]} > 0)) || return 1
+                last_index=$((${#normalized[@]} - 1))
+                unset "normalized[${last_index}]"
+                ;;
+            *) normalized+=("${component}") ;;
+        esac
+    done
+    ((${#normalized[@]} > 0)) || return 1
+    joined=$(IFS=/; printf '%s' "${normalized[*]}")
+    printf '%s\n' "${joined}"
+}
+
+archive_path_is_within_root() {
+    local path=$1 root=$2
+    [[ ${path} == "${root}" || ${path} == "${root}/"* ]]
+}
+
+archive_link_target_is_safe() {
+    local entry=$1 target=$2 expected_root=$3 base resolved
+    [[ ${target} != /* ]] || return 1
+    base=${entry%/*}
+    [[ ${base} != "${entry}" ]] || base=''
+    resolved=$(normalize_archive_path "${base:+${base}/}${target}") || return 1
+    archive_path_is_within_root "${resolved}" "${expected_root}"
+}
+
+archive_hardlink_target_is_safe() {
+    local target=$1 expected_root=$2 resolved
+    [[ ${target} != /* ]] || return 1
+    resolved=$(normalize_archive_path "${target}") || return 1
+    archive_path_is_within_root "${resolved}" "${expected_root}"
+}
+
 sound_archive_is_safe() {
-    local archive=$1 expected_root=$2 entry type listing link_target parent listing_file required_parent=false
+    local archive=$1 expected_root=$2 entry type listing link_target separator link_suffix parent listing_file required_parent=false
     local -a listings
     listing_file=$(mktemp) || return 1
     # shellcheck disable=SC2016
@@ -530,12 +572,19 @@ sound_archive_is_safe() {
             log "Soundarchiv enthält eine nicht lesbare Tar-Auflistung: ${listing}"
             return 1
         fi
-        if [[ ${type} == l ]]; then
-            link_target=${entry##* -> }
-            entry=${entry% -> "${link_target}"}
-            [[ ${entry} != "${link_target}" ]] || {
-                log "Soundarchiv enthält einen nicht lesbaren symbolischen Link: ${listing}"; return 1;
+        if [[ ${type} == l || ${type} == h ]]; then
+            if [[ ${type} == l ]]; then
+                link_target=${entry##*' -> '}
+                separator=' -> '
+            else
+                link_target=${entry##*' link to '}
+                separator=' link to '
+            fi
+            link_suffix="${separator}${link_target}"
+            [[ ${entry} == *"${link_suffix}" ]] || {
+                log "Soundarchiv enthält einen nicht lesbaren Link: ${listing}"; return 1;
             }
+            entry=${entry:0:${#entry}-${#link_suffix}}
         fi
         required_parent=false
         parent=${expected_root}
@@ -562,8 +611,14 @@ sound_archive_is_safe() {
             continue
         fi
         if [[ ${type} == l ]]; then
-            [[ ${link_target} != /* && ${link_target} != .. && ${link_target} != ../* && ${link_target} != */../* && ${link_target} != */.. ]] || {
+            archive_link_target_is_safe "${entry}" "${link_target}" "${expected_root}" || {
                 log "Soundarchiv enthält einen unsicheren symbolischen Link: ${listing}"; return 1;
+            }
+            continue
+        fi
+        if [[ ${type} == h ]]; then
+            archive_hardlink_target_is_safe "${link_target}" "${expected_root}" || {
+                log "Soundarchiv enthält einen unsicheren harten Link: ${listing}"; return 1;
             }
             continue
         fi
@@ -2030,7 +2085,11 @@ run_installation() {
         print_warning 'Die deutschen Sounds konnten nicht installiert werden. Englisch bleibt aktiv.'
     fi
     if ! install_english_sounds; then
-        if ${BUILD_PERFORMED}; then print_warning 'SvxLink wurde erfolgreich aktualisiert.'; else print_warning 'SvxLink ist bereits aktuell.'; fi
+        if ${BUILD_PERFORMED}; then
+            print_warning 'SvxLink-Build und Grundkonfiguration wurden abgeschlossen, die Gesamtinstallation ist jedoch unvollständig.'
+        else
+            print_warning 'Die vorhandene SvxLink-Installation blieb unverändert, die Gesamtinstallation ist jedoch unvollständig.'
+        fi
         print_error 'Die Soundinstallation konnte nicht vollständig abgeschlossen werden.'
         print_info 'Der Updatevorgang kann erneut gestartet werden.'
         return 1
