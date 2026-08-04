@@ -165,7 +165,7 @@ show_header() {
 }
 
 log() {
-    print_info "${SCRIPT_NAME}: $*"
+    print_info "$*"
 }
 
 die() {

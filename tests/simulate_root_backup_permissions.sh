@@ -39,6 +39,13 @@ else
 fi
 if grep -Fq 'Root-Rechte erforderlich' "${nonroot_output}"; then fail 'read-only show-config has no root error'; else pass 'read-only show-config has no root error'; fi
 
+log_output=$(log 'Testmeldung')
+[[ ${log_output} == '[INFO] Testmeldung' ]] && pass 'log output has no script-name prefix' || fail "log output must be [INFO] Testmeldung (got ${log_output})"
+forbidden_prefix="${SCRIPT_NAME}"':'
+[[ ${log_output} != *"${forbidden_prefix}"* ]] && pass 'log output contains no script-name prefix' || fail 'log output contains a script-name prefix'
+root_instruction=$(print_root_required_error --check 2>&1 || true)
+[[ ${root_instruction} == *"sudo ./${SCRIPT_NAME} --check"* ]] && pass 'root instruction retains concrete script command' || fail 'root instruction must retain concrete script command'
+
 header=$(show_header)
 [[ ${header} != *'Root gestartet'* && ${header} != *'sudo ./svxlink_setup.sh'* ]] && pass 'header contains no repeated root hint' || fail 'header contains no repeated root hint'
 header_frame=$(printf '%s\n' "${header}" | awk '/^[+|]/')
