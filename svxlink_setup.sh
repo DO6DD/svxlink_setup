@@ -82,9 +82,10 @@ readonly ELENATA_ALSA_HELPER_FILE="${elenata_alsa_helper_path}"
 readonly ELENATA_ALSA_PENDING_FILE="${elenata_alsa_pending_path}"
 readonly ELENATA_ALSA_CONFIG_FILE="${elenata_alsa_config_path}"
 readonly ELENATA_ALSA_POSTBOOT_LOG_FILE="${elenata_alsa_postboot_log_path}"
-readonly GERMAN_SOUND_ARCHIVE_DEFAULT="${SCRIPT_DIR}/resources/sounds/de_DE-anna-16k.tar.bz2"
-readonly GERMAN_SOUND_SHA256="ec35d15ee3ddb012558c56626f408359db6108c701b2f27c9c3d89309ad78415"
-readonly GERMAN_SOUND_ROOT="de_DE-anna-16k"
+readonly GERMAN_SOUND_URL="https://cloud.stockreiter.eu/public.php/dav/files/xYa3dWLK9NtAer4/"
+readonly GERMAN_SOUND_AUTH_USER="xYa3dWLK9NtAer4"
+readonly GERMAN_SOUND_SHA256="bc30601196bd493b672525e5999252f5d7f4da36a783fadbd0c4d3589838d9c4"
+readonly GERMAN_SOUND_ROOT="sounds/de_DE"
 # SvxLink 26.05.1 has no matching sound release. 25.05 is the latest official
 # release from the SvxLink project and is verified by the fixed SHA-256 below.
 readonly ENGLISH_SOUND_URL="https://github.com/sm0svx/svxlink-sounds-en_US-heather/releases/download/25.05/svxlink-sounds-en_US-heather-16k-25.05.tar.bz2"
@@ -460,7 +461,7 @@ sound_archive_is_safe() {
         [[ ${entry} != /* && ${entry} != *'../'* && ${entry} != '..' ]] || {
             log "Soundarchiv enthält einen unsicheren Pfad: ${entry}"; return 1;
         }
-        [[ ${entry} != *'/.svn/'* && ${entry} != */.svn && ${entry} != *.tcl ]] || {
+        [[ ${entry} != *'/.git/'* && ${entry} != */.git && ${entry} != *'/.svn/'* && ${entry} != */.svn && ${entry} != *.svn-base && ${entry} != *.tcl ]] || {
             log "Soundarchiv enthält einen unzulässigen Eintrag: ${entry}"; return 1;
         }
     done < <(tar -tjf "${archive}")
@@ -572,19 +573,61 @@ install_sound_archive() (
     return 0
 )
 
-install_german_sounds() {
-    local replace_existing=${1:-false} target
-    local archive=${GERMAN_SOUND_ARCHIVE_DEFAULT}
-    local expected_sha=${GERMAN_SOUND_SHA256}
-    if [[ ${SVXLINK_TEST_MODE:-false} == true ]]; then
-        archive=${GERMAN_SOUND_ARCHIVE:-${GERMAN_SOUND_ARCHIVE_DEFAULT}}
-        expected_sha=${GERMAN_SOUND_SHA256_OVERRIDE:-${GERMAN_SOUND_SHA256}}
+write_german_sound_curl_config() {
+    local config_file=$1 password='' escaped_password trace_was_enabled=false
+    [[ $- == *x* ]] && { trace_was_enabled=true; set +x; }
+
+    if [[ ${SVXLINK_TEST_MODE:-false} == true && -n ${GERMAN_SOUND_TEST_PASSWORD:-} ]]; then
+        password=${GERMAN_SOUND_TEST_PASSWORD}
+    else
+        if [[ ! -t 0 ]]; then
+            print_error 'Das Passwort für die deutschen Sounds kann nur interaktiv abgefragt werden.'
+            if ${trace_was_enabled}; then set -x; fi
+            return 1
+        fi
+        printf 'Passwort für die deutschen Sounds: ' >&2
+        if ! IFS= read -r -s password; then
+            printf '\n' >&2
+            print_error 'Passwort für die deutschen Sounds konnte nicht gelesen werden.'
+            if ${trace_was_enabled}; then set -x; fi
+            return 1
+        fi
+        printf '\n' >&2
     fi
+    if [[ -z ${password} ]]; then
+        print_error 'Für den Download der deutschen Sounds ist ein Passwort erforderlich.'
+        if ${trace_was_enabled}; then set -x; fi
+        return 1
+    fi
+
+    escaped_password=${password//\\/\\\\}
+    escaped_password=${escaped_password//\"/\\\"}
+    (umask 077; printf 'user = "%s:%s"\n' "${GERMAN_SOUND_AUTH_USER}" "${escaped_password}" >"${config_file}")
+    chmod 0600 "${config_file}"
+    unset password escaped_password
+    if ${trace_was_enabled}; then set -x; fi
+}
+
+install_german_sounds() (
+    local replace_existing=${1:-false} target temporary archive curl_config expected_sha=${GERMAN_SOUND_SHA256}
     target="${SVXLINK_SOUNDS_DIR}/de_DE"
     sound_package_already_present de_DE Deutsche && return 0
     [[ ! -e ${target} || ${replace_existing} == true ]] || replace_existing=true
+    require_command curl || return 1
+    if [[ ${SVXLINK_TEST_MODE:-false} == true ]]; then
+        expected_sha=${GERMAN_SOUND_SHA256_OVERRIDE:-${GERMAN_SOUND_SHA256}}
+    fi
+    temporary=$(mktemp -d)
+    trap 'rm -rf "${temporary}"' EXIT
+    archive="${temporary}/svxlink-sounds-de_DE-nextcloud.tar.bz2"
+    curl_config="${temporary}/curl.conf"
+    write_german_sound_curl_config "${curl_config}" || return 1
+    if ! run_logged 'Deutsche Sounds werden heruntergeladen' curl --config "${curl_config}" --fail --location --silent --show-error --proto '=https' --tlsv1.2 --retry 2 --connect-timeout 20 -o "${archive}" "${GERMAN_SOUND_URL}"; then
+        log 'Download der deutschen Sounds fehlgeschlagen. Bei HTTP 401 bitte Passwort und Zugriffsrechte prüfen.'
+        return 1
+    fi
     install_sound_archive "${archive}" "${expected_sha}" "${GERMAN_SOUND_ROOT}" de_DE "${replace_existing}"
-}
+)
 
 install_english_sounds() (
     local replace_existing=${1:-false} target
@@ -1698,8 +1741,8 @@ install_sound_interactively() {
 
 show_german_activation_information() {
     cat <<EOF
-Die deutsche Sprache verwendet den mit diesem Projekt
-bereitgestellten Sprachsatz "Anna 16k".
+Die deutsche Sprache verwendet den vollständigen
+Sprachsatz aus dem passwortgeschützten Nextcloud-Archiv.
 
 Zielordner:
 

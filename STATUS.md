@@ -7,6 +7,7 @@
 - `-D` schreibt ein geschütztes Debuglog; read-only Aufrufe und Hauptmenü funktionieren ohne Root, schreibende Aktionen verlangen Root erst vor der Änderung.
 - ELENATA verwaltet die Bootwerte idempotent, deaktiviert `vc4-kms-v3d`, behält feste GPIOD-Pins bei und richtet bei fehlender Karte `Audio` eine einmalige ALSA-Post-Boot-Konfiguration ein.
 - Die vollständigen DB0DAM-950-Mixer-, AVC-, BASS- und Signalwegwerte sind als Pflichtregler implementiert. DB0VL-Pegel sind nur stationsspezifisch und kein Standard.
+- Deutsche Sounds werden bei fehlendem `de_DE` aus dem passwortgeschützten Nextcloud-Archiv bezogen; Passwortabfrage, Curl-Konfiguration und Download sind temporär, die Prüfsumme und die Archivwurzel `sounds/de_DE/` werden vor der Installation geprüft. Der reale Download mit Zugangsdaten steht noch aus.
 
 ## Statisch auf dem ThinkPad geprüft
 
@@ -16,8 +17,8 @@
 
 - `simulate_elenata`: 125 erfolgreich, 0 Fehler.
 - `simulate_build_progress`: 6 erfolgreich, 0 Fehler.
-- `simulate_root_backup_permissions`: 41 erfolgreich, 0 Fehler.
-- `simulate_sound_management`: 44 erfolgreich, 0 Fehler.
+- `simulate_root_backup_permissions`: 44 erfolgreich, 0 Fehler.
+- `simulate_sound_management`: 53 erfolgreich, 0 Fehler.
 - `simulate_build_decision`: 15 erfolgreich, 0 Fehler.
 - `simulate_legacy_profiles`: 27 erfolgreich, 0 Fehler.
 
@@ -43,6 +44,7 @@
 - Produktiver SvxLink-Betrieb mit Zielhardware.
 - Debian-12-VM sowie reale Tests der historischen Profile 1–3 auf aktueller Zielhardware.
 - Separate externe deutsche RepeaterLogic: `DEFAULT_LANG=de_DE` aktiviert nur Sprachansagen und integriert keine angepasste Tcl-Logic.
+- Reale Prüfung des passwortgeschützten deutschen Nextcloud-Downloads mit gültigen Zugangsdaten, vollständigem Archiv und Hörtest.
 
 ## Nächster Test
 

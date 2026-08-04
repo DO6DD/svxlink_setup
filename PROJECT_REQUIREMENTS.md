@@ -83,7 +83,7 @@
 ## Deutsche Sounds und RepeaterLogic
 
 - Der Installer stellt Englisch und Deutsch als Sprachressourcen bereit. Englisch wird aus dem offiziellen Release `25.05` von `sm0svx/svxlink-sounds-en_US-heather` mit fester SHA-256 `e79e61bec17a24fad093edfb21e7f8ca51af33b9590db954b4789271db2957dd` installiert.
-- Der deutsche Sprachsatz Anna 16k liegt als geprüftes Archiv im Repository unter `resources/sounds/`. Herkunft, Größe und SHA-256 sind dokumentiert; Lizenz- und Weiterverbreitungsfragen bleiben ausdrücklich offen.
+- Der vollständige deutsche Sprachsatz wird bei Bedarf aus dem passwortgeschützten Nextcloud-Archiv bezogen. Das Passwort wird ausschließlich interaktiv verdeckt abgefragt und nur in einer temporären Curl-Konfiguration mit Modus `0600` verwendet; weder URL, normale Logs noch Debuglogs enthalten das Passwort. Die feste Prüfsumme lautet `bc30601196bd493b672525e5999252f5d7f4da36a783fadbd0c4d3589838d9c4`, die erwartete Archivwurzel ist `sounds/de_DE/`; nur dieser Unterbaum wird installiert.
 - Archive werden vor dem Entpacken auf Prüfsumme, erwartete Wurzel, Traversal, unsichere Links und Sonderdateien geprüft und nur temporär entpackt. Sichere interne relative Links werden nach der Prüfung in reguläre Dateien materialisiert.
 - Nach erfolgreicher normaler Installation ist `de_DE` die Standardsprache für `SimplexLogic` und `RepeaterLogic`; bei fehlgeschlagener deutscher Installation bleibt funktionsfähiges `en_US` aktiv.
 - Die Sprachaktivierung verlangt nur einen vorhandenen Ordner mit mindestens einer WAV-Datei. Eine Vollständigkeits-, Modul- oder Audioformatprüfung des installierten deutschen Bestands findet bewusst nicht statt.
@@ -97,7 +97,7 @@
 
 - Das alte Script klonte `dl1hrc/svxlink-sounds-de_DE-petra`, verlinkte dessen Verzeichnis als `de_DE` und lud zusätzlich `de_DE-anna-16k.tar.bz2` von `server42.net`.
 - Das Petra-Repository wird nicht automatisch installiert, weil es auf Nutzungsbeschränkungen hinweist.
-- Das eingebettete Anna-Archiv ersetzt den historischen Laufzeitdownload von `server42.net`; die URL bleibt ausschließlich als Herkunftsnachweis erhalten.
+- Das eingebettete Anna-Archiv und der historische Laufzeitdownload von `server42.net` sind keine Installationsquellen mehr. Der deutsche Download verwendet die passwortgeschützte Nextcloud-Quelle; bei HTTP 401 bleibt der vorhandene Bestand unverändert und die Ausgabe fordert zur Prüfung von Passwort und Zugriffsrechten auf.
 - Die Installation nutzt `/usr/share/svxlink/sounds/de_DE` und `/usr/share/svxlink/sounds/en_US`. Jeweils nur der gewählte Sprachordner wird rekursiv auf `svxlink:svxlink`, Verzeichnisse auf `0755` und reguläre Dateien auf `0644` normalisiert; Symbolziele werden nicht dereferenziert.
 - Status- und Testausgaben verwenden textuelle Statuszeilen. ANSI-Farben werden nur bei Terminalausgabe verwendet; `NO_COLOR` und Umleitungen bleiben ANSI-frei.
 - Produktive Befehlsausgaben werden pro Lauf unter `/var/log/svxlink-setup/install-<Zeitstempel>.log` protokolliert; das Terminal zeigt Phasen und bei Fehlern einen Logauszug.

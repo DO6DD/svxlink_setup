@@ -70,9 +70,9 @@ Erwartet und real bestätigt: unveränderter Quellstand und Releaseversion `26.0
 ### `tests/simulate_sound_management.sh`
 
 - Prüft Menüanzeige ohne Blockierung sowie die nicht-interaktiven CLI-Hinweise.
-- Prüft das eingebettete Anna-16k-Archiv auf feste SHA-256 und Archivwurzel `de_DE-anna-16k/`.
-- Installiert deutsche und englische Testarchive ausschließlich in temporäre Testpfade; kein Root und keine Netzwerkverbindung sind erforderlich.
-- Prüft falsche Prüfsumme, Traversal, absolute Archivpfade und unsichere symbolische Links als kontrollierte Fehler; sichere interne Links des Anna-Archivs werden materialisiert.
+- Simuliert den passwortgeschützten deutschen Nextcloud-Download mit einer temporären Curl-Konfiguration: feste lokale Archivbezeichnung, Modus `0600`, SHA-256, Archivwurzel `sounds/de_DE/`, Installation ausschließlich nach `de_DE` sowie Aufräumen bei Erfolg und Fehler.
+- Installiert deutsche und englische Testarchive ausschließlich in temporäre Testpfade; kein Root, kein echtes Passwort und keine Netzwerkverbindung sind erforderlich.
+- Prüft 401/falsches Passwort, falsche Prüfsumme, Traversal, absolute Archivpfade und unsichere symbolische Links als kontrollierte Fehler; sichere interne Links werden materialisiert. Das Testpasswort erscheint weder in normaler Ausgabe noch im Debuglog.
 - Prüft idempotente Soundprüfung, fehlende oder leere deutsche Verzeichnisse, Sicherung der SvxLink-Konfiguration und sektionsgenaue Sprachumschaltung für `SimplexLogic` und `RepeaterLogic`.
 - Prüft, dass ein fehlendes `de_DE` die Konfiguration nicht ändert und dass andere Sektionen unverändert bleiben.
 - Prüft keine Vollständigkeit, Audioheader oder Modulabdeckung deutscher Sounds, entsprechend der vorgesehenen Aktivierungslogik.
@@ -176,7 +176,7 @@ tests/simulate_root_backup_permissions.sh
 - Zweiter Anschluss.
 - Produktiver Dienststart.
 - Deutsche Sounds.
-- Echter Installations- und Hörtest des eingebetteten Anna-16k-Satzes sowie des offiziellen englischen Satzes.
+- Echter Installations- und Hörtest des passwortgeschützten deutschen Nextcloud-Satzes sowie des offiziellen englischen Satzes.
 - Externe deutsche RepeaterLogic.
 - Echte Hardwaretests für ICS Pi-Repeater, uSvxCard und WM8960 Audio-HAT auf aktueller Raspberry-Pi-OS-/Debian-13-Basis.
 

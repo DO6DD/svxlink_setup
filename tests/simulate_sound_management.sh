@@ -13,6 +13,8 @@ export SVXLINK_TEST_MODE=true
 export SVXLINK_CONFIG_FILE="${TEMP_DIR}/svxlink.conf"
 export SVXLINK_SOUNDS_DIR="${TEMP_DIR}/sounds"
 export SVXLINK_BACKUP_DIR="${TEMP_DIR}/backups"
+export SVXLINK_INSTALL_LOG_DIR="${TEMP_DIR}/logs"
+export SVXLINK_DEBUG_LOG_DIR="${TEMP_DIR}/debug"
 
 failures=0
 successes=0
@@ -74,6 +76,31 @@ assert_production_paths_unchanged() {
     done
 }
 
+enable_german_curl_mock() {
+    # shellcheck disable=SC2317
+    curl() {
+        local argument config_file='' output_file=''
+        while (($#)); do
+            argument=$1
+            case ${argument} in
+                --config) config_file=$2; shift 2 ;;
+                -o) output_file=$2; shift 2 ;;
+                *) shift ;;
+            esac
+        done
+        printf 'curl\n' >>"${TEMP_DIR}/german-curl-calls"
+        printf '%s\n' "${config_file}" >"${TEMP_DIR}/german-curl-config-path"
+        printf '%s\n' "${output_file}" >"${TEMP_DIR}/german-curl-output-path"
+        stat -c '%a' "${config_file}" >"${TEMP_DIR}/german-curl-config-mode"
+        cp "${config_file}" "${TEMP_DIR}/german-curl-config-capture"
+        if [[ ${GERMAN_SOUND_TEST_MODE:-success} == unauthorized ]]; then
+            printf 'curl: (22) The requested URL returned error: 401\n' >&2
+            return 22
+        fi
+        cp "${GERMAN_SOUND_TEST_ARCHIVE}" "${output_file}"
+    }
+}
+
 # shellcheck disable=SC1091
 source "${ROOT}/svxlink_setup.sh"
 trap - ERR
@@ -84,28 +111,52 @@ snapshot_production_paths before
 
 printf '%s\n' '[GLOBAL]' 'LOGICS=RepeaterLogic' '[SimplexLogic]' 'DEFAULT_LANG=en_US' '[RepeaterLogic]' 'DEFAULT_LANG=en_US' '[Other]' 'DEFAULT_LANG=keep' >"${SVXLINK_CONFIG}"
 
-expect_value "$(sha256sum "${ROOT}/resources/sounds/de_DE-anna-16k.tar.bz2" | awk '{print $1}')" "${GERMAN_SOUND_SHA256}" 'bundled Anna archive checksum'
-expect_value "$(wc -c <"${ROOT}/resources/sounds/de_DE-anna-16k.tar.bz2")" 18677572 'bundled Anna archive size'
-tar -tjf "${ROOT}/resources/sounds/de_DE-anna-16k.tar.bz2" >"${TEMP_DIR}/anna-list.txt"
-grep -Fqx "${GERMAN_SOUND_ROOT}/" "${TEMP_DIR}/anna-list.txt" && pass 'bundled Anna archive root' || fail 'bundled Anna archive root'
-sound_archive_is_safe "${ROOT}/resources/sounds/de_DE-anna-16k.tar.bz2" "${GERMAN_SOUND_ROOT}" && pass 'bundled Anna archive safety' || fail 'bundled Anna archive safety'
-
-make_archive "${GERMAN_SOUND_ROOT}" "${TEMP_DIR}/german.tar.bz2"
-export GERMAN_SOUND_ARCHIVE="${TEMP_DIR}/german.tar.bz2"
-export GERMAN_SOUND_SHA256_OVERRIDE=$(sha256sum "${GERMAN_SOUND_ARCHIVE}" | awk '{print $1}')
-install_german_sounds
-expect_file "${SVXLINK_SOUNDS_DIR}/de_DE/Core/online.wav" 'German installation from mock archive'
+make_archive "${GERMAN_SOUND_ROOT}" "${TEMP_DIR}/german-download.tar.bz2"
+export GERMAN_SOUND_TEST_ARCHIVE="${TEMP_DIR}/german-download.tar.bz2"
+export GERMAN_SOUND_TEST_PASSWORD='sound-test-password'
+export GERMAN_SOUND_SHA256_OVERRIDE=$(sha256sum "${GERMAN_SOUND_TEST_ARCHIVE}" | awk '{print $1}')
+enable_german_curl_mock
+GERMAN_SOUND_TEST_MODE=success
+DEBUG_MODE=true
+start_debug_log
+if install_german_sounds >"${TEMP_DIR}/german-success.out" 2>&1; then
+    pass 'authenticated German download succeeds'
+else
+    fail "authenticated German download failed: $(<"${TEMP_DIR}/german-success.out")"
+fi
+set +x
+expect_file "${SVXLINK_SOUNDS_DIR}/de_DE/Core/online.wav" 'authenticated German download installs sounds/de_DE'
 expect_value "$(stat -c '%a' "${SVXLINK_SOUNDS_DIR}/de_DE")" 755 'German sound directory permissions'
 expect_value "$(stat -c '%a' "${SVXLINK_SOUNDS_DIR}/de_DE/Core/online.wav")" 644 'German sound file permissions'
+grep -Fqx "${GERMAN_SOUND_ROOT}/" < <(tar -tjf "${GERMAN_SOUND_TEST_ARCHIVE}") && pass 'German archive root is sounds/de_DE' || fail 'German archive root must be sounds/de_DE'
+grep -Fqx 'user = "xYa3dWLK9NtAer4:sound-test-password"' "${TEMP_DIR}/german-curl-config-capture" && pass 'German download uses authenticated curl configuration' || fail 'German download must use authenticated curl configuration'
+expect_value "$(cat "${TEMP_DIR}/german-curl-config-mode")" 600 'temporary curl configuration mode'
+expect_value "$(basename "$(cat "${TEMP_DIR}/german-curl-output-path")")" svxlink-sounds-de_DE-nextcloud.tar.bz2 'German download uses fixed local archive name'
+[[ ! -e $(cat "${TEMP_DIR}/german-curl-config-path") && ! -e $(cat "${TEMP_DIR}/german-curl-output-path") ]] && pass 'German temporary credentials and download removed after success' || fail 'German temporary credentials and download must be removed after success'
+if grep -Fq "${GERMAN_SOUND_TEST_PASSWORD}" "${TEMP_DIR}/german-success.out" "${DEBUG_LOG_FILE}"; then fail 'German password must not appear in output or debug log'; else pass 'German password is absent from output and debug log'; fi
 german_hash=$(find "${SVXLINK_SOUNDS_DIR}/de_DE" -type f -exec sha256sum {} + | sha256sum | awk '{print $1}')
+german_curl_calls=$(wc -l <"${TEMP_DIR}/german-curl-calls")
 install_german_sounds
 expect_value "$(find "${SVXLINK_SOUNDS_DIR}/de_DE" -type f -exec sha256sum {} + | sha256sum | awk '{print $1}')" "${german_hash}" 'German installation idempotent'
+expect_value "$(wc -l <"${TEMP_DIR}/german-curl-calls")" "${german_curl_calls}" 'existing German sounds do not download again'
 
 rm -rf "${SVXLINK_SOUNDS_DIR}/de_DE"
 export GERMAN_SOUND_SHA256_OVERRIDE=deadbeef
 if install_german_sounds >/dev/null 2>&1; then fail 'wrong German checksum must fail'; else pass 'wrong German checksum rejected'; fi
 [[ ! -e ${SVXLINK_SOUNDS_DIR}/de_DE ]] && pass 'wrong checksum leaves target unchanged' || fail 'wrong checksum leaves target unchanged'
-export GERMAN_SOUND_SHA256_OVERRIDE=$(sha256sum "${GERMAN_SOUND_ARCHIVE}" | awk '{print $1}')
+[[ ! -e $(cat "${TEMP_DIR}/german-curl-config-path") && ! -e $(cat "${TEMP_DIR}/german-curl-output-path") ]] && pass 'German temporary credentials and download removed after checksum failure' || fail 'German temporary files must be removed after checksum failure'
+export GERMAN_SOUND_SHA256_OVERRIDE=$(sha256sum "${GERMAN_SOUND_TEST_ARCHIVE}" | awk '{print $1}')
+
+mkdir -p "${SVXLINK_SOUNDS_DIR}/de_DE"
+printf previous >"${SVXLINK_SOUNDS_DIR}/de_DE/previous.txt"
+german_previous_hash=$(find "${SVXLINK_SOUNDS_DIR}/de_DE" -type f -exec sha256sum {} + | sha256sum | awk '{print $1}')
+GERMAN_SOUND_TEST_MODE=unauthorized
+if install_german_sounds >"${TEMP_DIR}/german-401.out" 2>&1; then fail 'HTTP 401 must fail German download'; else pass 'HTTP 401 rejects German download'; fi
+grep -Fq 'Bei HTTP 401 bitte Passwort und Zugriffsrechte prüfen.' "${TEMP_DIR}/german-401.out" && pass 'HTTP 401 emits clear German authentication error' || fail 'HTTP 401 must emit clear German authentication error'
+expect_value "$(find "${SVXLINK_SOUNDS_DIR}/de_DE" -type f -exec sha256sum {} + | sha256sum | awk '{print $1}')" "${german_previous_hash}" 'HTTP 401 leaves existing German sounds unchanged'
+[[ ! -e $(cat "${TEMP_DIR}/german-curl-config-path") && ! -e $(cat "${TEMP_DIR}/german-curl-output-path") ]] && pass 'German temporary credentials and download removed after HTTP 401' || fail 'German temporary files must be removed after HTTP 401'
+rm -rf "${SVXLINK_SOUNDS_DIR}/de_DE"
+GERMAN_SOUND_TEST_MODE=success
 
 for kind in traversal absolute link; do
     make_unsafe_archive "${kind}" "${TEMP_DIR}/${kind}.tar.bz2"
@@ -119,7 +170,7 @@ done
 mkdir -p "${SVXLINK_SOUNDS_DIR}/de_DE"
 : >"${SVXLINK_SOUNDS_DIR}/de_DE/local.wav"
 install_german_sounds
-expect_file "${SVXLINK_SOUNDS_DIR}/de_DE/Core/online.wav" 'empty German directory is replaced from embedded archive'
+expect_file "${SVXLINK_SOUNDS_DIR}/de_DE/Core/online.wav" 'empty German directory is replaced from authenticated download'
 rm -rf "${SVXLINK_SOUNDS_DIR}/de_DE"
 
 make_archive "${ENGLISH_SOUND_ROOT}" "${TEMP_DIR}/english.tar.bz2"
@@ -135,6 +186,7 @@ english_hash=$(find "${SVXLINK_SOUNDS_DIR}/en_US" -type f -exec sha256sum {} + |
 curl() { printf 'CURL_CALLED\n'; return 1; }
 install_english_sounds >"${TEMP_DIR}/english-present.out"
 unset -f curl
+enable_german_curl_mock
 expect_value "$(find "${SVXLINK_SOUNDS_DIR}/en_US" -type f -exec sha256sum {} + | sha256sum | awk '{print $1}')" "${english_hash}" 'existing English sounds are not extracted again'
 grep -Fq 'Download wird übersprungen.' "${TEMP_DIR}/english-present.out" && pass 'existing English sounds prevent download' || fail 'existing English sounds must prevent download'
 grep -Fq 'CURL_CALLED' "${TEMP_DIR}/english-present.out" && fail 'existing English sounds must not call curl' || pass 'existing English sounds do not call curl'

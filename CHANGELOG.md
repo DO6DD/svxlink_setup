@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Deutsche Sounds auf das vollständige passwortgeschützte Nextcloud-Archiv umgestellt. Passwortabfrage, temporäre Curl-Konfiguration, SHA-256-Prüfung, sichere Installation ausschließlich aus `sounds/de_DE/` sowie Aufräumen bei Erfolg und Fehler ergänzt; die englische Heather-Quelle bleibt unverändert.
+
 - Paketinstallation um die vollständige angeforderte Abhängigkeitsmenge erweitert. Nach einem Debian-13-arm64-Test werden `libsigc++-2.0-dev` und `libgcrypt20-dev` direkt installiert: Die frühere Alias-/Kandidatenprüfung meldete sie fälschlich als nicht verfügbar. Der reale Neuinstallationstest wurde dort abgebrochen und muss vollständig wiederholt werden. `raspberrypi-kernel-headers` wurde entfernt, weil es auf dem realen Zielsystem nicht verfügbar war und ELENATA kein externes Kernelmodul baut.
 
 - Dokumentation an Code, Simulationen und bekannte VM-/Raspberry-Pi-Nachweise angeglichen; veraltete Branch-, Commit-, Mixer-, Debian-, Root- und Repositoryangaben bereinigt.
