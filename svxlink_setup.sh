@@ -1062,7 +1062,6 @@ required() { local control=$1; shift; control_exists "${control}" || { note "Req
 optional() { local control=$1 value=$2; if control_exists "${control}"; then amixer -c Audio sset "${control}" "${value}" || note "Could not set optional ALSA control: ${control}"; else note "Optional ALSA control is unavailable: ${control}"; fi; }
 apply() { local card; command -v amixer >/dev/null 2>&1 || { note 'Required command is unavailable: amixer'; return 1; }; command -v asactl >/dev/null 2>&1 || { note 'Required command is unavailable: asactl'; return 1; }; card=$(card_number); [[ -n ${card} ]] || return 2; required Headphone 120,120 unmute && required 'Headphone Mux' LINE_IN && required 'Headphone Playback ZC' on && required PCM 165,165 && required Lineout 21,21 unmute && required Mic 0 && required Capture "${CAPTURE_LEFT:-6},${CAPTURE_RIGHT:-6}" unmute && required 'Capture Attenuate Switch (-6dB)' on && required 'Capture Mux' LINE_IN && required 'Capture ZC' on && required AVC off && required 'AVC Hard Limiter' off && required 'AVC Integrator Response' 0 && required 'AVC Max Gain' 0 && required 'AVC Threshold' 0 && required 'BASS 0' 0 && required 'BASS 1' 0 && required 'BASS 2' 0 && required 'BASS 3' 0 && required 'BASS 4' 0 && required 'DAP MIX Mux' ADC && required 'DAP Main channel' 0 && required 'DAP Mix channel' 0 && required 'DAP Mux' ADC && required 'Digital Input Mux' I2S || return 1; if [[ -n ${ALSA_STATE_FILE:-} ]]; then asactl store -f "${ALSA_STATE_FILE}" "${card}"; else asactl store "${card}"; fi || { note "Could not store ALSA state for card ${card}"; return 1; }; note "ALSA state stored for card ${card}"; }
 [[ ${ELENATA_ALSA_LIBRARY:-false} == true ]] && return 0
-source "${ELENATA_ALSA_CONFIG_FILE}"
 install -d -m 0755 "$(dirname "${ELENATA_ALSA_LOG_FILE}")"; : >"${ELENATA_ALSA_LOG_FILE}"; chmod 0600 "${ELENATA_ALSA_LOG_FILE}"; chown root:root "${ELENATA_ALSA_LOG_FILE}" 2>/dev/null || true
 note 'Post-boot ELENATA ALSA configuration started; timeout 90s.'
 for attempt in $(seq 1 45); do card=$(card_number); [[ -z ${card} ]] || break; sleep 2; done
@@ -1532,7 +1531,6 @@ configure_logging() {
     missingok
     notifempty
     copytruncate
-    su svxlink svxlink
 }
 EOF
     if ! output=$(logrotate -d "${LOGROTATE_CONFIG}" 2>&1); then

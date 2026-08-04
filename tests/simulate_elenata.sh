@@ -239,6 +239,29 @@ configure_hardware_profile
 [[ -f ${ELENATA_ALSA_PENDING_FILE} && -f ${ELENATA_ALSA_UNIT_FILE} && -f ${ELENATA_ALSA_HELPER_FILE} && -f ${ELENATA_ALSA_CONFIG_FILE} ]] && pass 'missing Audio creates all post-boot runtime files' || fail 'missing Audio creates post-boot runtime files'
 [[ $(stat -c '%a' "${ELENATA_ALSA_HELPER_FILE}") == 755 && $(stat -c '%a' "${ELENATA_ALSA_CONFIG_FILE}") == 600 ]] && pass 'post-boot runtime files have safe modes' || fail 'post-boot runtime file modes'
 grep -Fq 'TimeoutStartSec=120' "${ELENATA_ALSA_UNIT_FILE}" && ! grep -Fq 'svxlink.service' "${ELENATA_ALSA_UNIT_FILE}" && pass 'post-boot unit is bounded and does not start SvxLink' || fail 'post-boot unit boundaries'
+grep -Fqx "EnvironmentFile=${ELENATA_ALSA_CONFIG_FILE}" "${ELENATA_ALSA_UNIT_FILE}" && pass 'post-boot unit loads the generated environment file' || fail 'post-boot unit environment file'
+if grep -Fq 'ELENATA_ALSA_CONFIG_FILE' "${ELENATA_ALSA_HELPER_FILE}"; then fail 'post-boot helper must not load a second configuration file'; else pass 'post-boot helper relies on systemd environment only'; fi
+grep -Fqx 'CAPTURE_LEFT=8' "${ELENATA_ALSA_CONFIG_FILE}" && grep -Fqx 'CAPTURE_RIGHT=5' "${ELENATA_ALSA_CONFIG_FILE}" && pass 'environment file contains all helper mixer variables' || fail 'environment file mixer variables'
+grep -Fq "for attempt in \$(seq 1 45)" "${ELENATA_ALSA_HELPER_FILE}" && grep -Fq 'sleep 2' "${ELENATA_ALSA_HELPER_FILE}" && grep -Fq 'timeout 90s' "${ELENATA_ALSA_HELPER_FILE}" && pass 'post-boot card timeout remains unchanged' || fail 'post-boot card timeout'
+
+set -a
+# shellcheck disable=SC1090
+source "${ELENATA_ALSA_CONFIG_FILE}"
+set +a
+timeout_bin="${TEMP_DIR}/timeout-bin"
+mkdir -p "${timeout_bin}"
+printf '%s\n' '#!/usr/bin/env bash' 'exit 0' >"${timeout_bin}/awk"
+printf '%s\n' '#!/usr/bin/env bash' "printf '1\\n'" >"${timeout_bin}/seq"
+printf '%s\n' '#!/usr/bin/env bash' 'exit 0' >"${timeout_bin}/sleep"
+command chmod 0755 "${timeout_bin}/awk" "${timeout_bin}/seq" "${timeout_bin}/sleep"
+timeout_pending="${TEMP_DIR}/state/timeout.pending"
+timeout_log="${TEMP_DIR}/logs/timeout.log"
+: >"${timeout_pending}"
+if env PATH="${timeout_bin}:${PATH}" ELENATA_ALSA_PENDING_FILE="${timeout_pending}" ELENATA_ALSA_LOG_FILE="${timeout_log}" CAPTURE_LEFT="${CAPTURE_LEFT}" CAPTURE_RIGHT="${CAPTURE_RIGHT}" "${ELENATA_ALSA_HELPER_FILE}" >"${TEMP_DIR}/timeout.out" 2>&1; then
+    fail 'missing Audio must fail after the post-boot timeout'
+else
+    grep -Fq 'Audio did not appear before timeout' "${timeout_log}" && [[ -e ${timeout_pending} ]] && ! grep -Fq 'unbound variable' "${TEMP_DIR}/timeout.out" && pass 'post-boot helper starts without unbound variable; missing Audio fails after timeout and keeps pending marker' || fail 'missing Audio timeout handling'
+fi
 audio_present=true
 configure_hardware_profile
 [[ ! -e ${ELENATA_ALSA_PENDING_FILE} ]] && pass 'available Audio clears pending post-boot setup' || fail 'available Audio clears pending post-boot setup'
@@ -252,6 +275,19 @@ if (configure_base_svxlink) >/dev/null 2>&1; then fail 'missing RepeaterLogic mu
 cp "${TEMP_DIR}/valid.conf" "${SVXLINK_CONFIG}"
 configure_logging
 [[ -f ${LOG_FILE} && -f ${LOGROTATE_FILE} ]] && pass 'temporary logging files' || fail 'temporary logging files'
+grep -Fqx '    copytruncate' "${LOGROTATE_FILE}" && pass 'logrotate retains copytruncate' || fail 'logrotate copytruncate'
+if grep -Fq 'su svxlink svxlink' "${LOGROTATE_FILE}"; then fail 'logrotate must not drop root privileges for rotated files'; else pass 'logrotate keeps root for rotated files'; fi
+expect "$(stat -c '%a' "${LOG_FILE}")" 644 'active log file mode remains 0644'
+mock_has chown svxlink:svxlink "${LOG_FILE}" && pass 'active log ownership remains svxlink:svxlink' || fail 'active log ownership'
+logrotate_test_dir="${TEMP_DIR}/logrotate"
+mkdir -p "${logrotate_test_dir}"
+printf 'rotation test\n' >"${logrotate_test_dir}/svxlink"
+sed "s|^/var/log/svxlink|${logrotate_test_dir}/svxlink|" "${LOGROTATE_FILE}" >"${logrotate_test_dir}/svxlink.conf"
+if command logrotate -f -s "${logrotate_test_dir}/status" "${logrotate_test_dir}/svxlink.conf" >"${logrotate_test_dir}/output" 2>&1 && [[ -f ${logrotate_test_dir}/svxlink.1 && ! -s ${logrotate_test_dir}/svxlink ]]; then
+    pass 'isolated logrotate simulation creates rotated file and copytruncates active log'
+else
+    fail "isolated root logrotate simulation: $(<"${logrotate_test_dir}/output")"
+fi
 snapshot after
 assert_snapshots
 printf 'INFO: Function simulation only; no complete root installation or hardware validation was performed.\n'

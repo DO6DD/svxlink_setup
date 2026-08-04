@@ -12,7 +12,7 @@
 - Automatische APT-Updates deaktiviert; `apt-daily.timer` und `apt-daily-upgrade.timer` sind maskiert.
 - `/etc/apt/apt.conf.d/20svxlink-disable-auto-updates` korrekt geschrieben.
 - `/var/log/svxlink` angelegt.
-- Logrotate verwendet täglich `rotate 14`, `compress`, `delaycompress`, `missingok`, `notifempty`, `copytruncate` und `su svxlink svxlink`.
+- Logrotate verwendet täglich `rotate 14`, `compress`, `delaycompress`, `missingok`, `notifempty` und `copytruncate`, ohne `su svxlink svxlink`, damit root die Rotationsdatei unter `/var/log` anlegen kann. Die aktive Logdatei bleibt bei `svxlink:svxlink` und Modus `0644`.
 - systemd-Service installiert und aktiviert.
 - Der Dienst bleibt bei Profil 0 ohne Hardware bewusst inactive.
 - Zweiter Installationslauf erfolgreich und idempotent.
@@ -56,6 +56,8 @@ Erwartet und real bestätigt: unveränderter Quellstand und Releaseversion `26.0
 - `tests/simulate_build_progress.sh` prüft Prozentanzeige, vollständiges Buildlog, Fehlerstatus, Fehlerauszug und nichtinteraktiven Fallback.
 
 - Die ELENATA-Simulation prüft die vom Hauptskript selbst erzeugte einmalige Post-Boot-ALSA-Unit, das Hilfsskript, Pending und sichere Modi. SvxLink wird dabei nicht gestartet.
+- Sie prüft, dass der Helper ausschließlich über `EnvironmentFile=` versorgt wird, alle von ihm variablen Capture-Mixerwerte dort stehen und keine Referenz auf `ELENATA_ALSA_CONFIG_FILE` enthält. Ein semantischer Unit-Test startet ihn mit exportierter EnvironmentFile-Umgebung ohne `unbound variable`; der beschleunigte Test ohne Karte bestätigt weiterhin den kontrollierten Timeoutfehler `Audio did not appear before timeout` und behält den Pending-Marker.
+- Die Simulation prüft die erzeugte Logrotate-Datei auf `copytruncate`, das fehlende `su svxlink svxlink`, aktive Logdatei-Modus-/Eigentümerlogik sowie einen echten isolierten Logrotate-Lauf in einem temporären Verzeichnis. `/var/log` bleibt dabei unverändert.
 - Sie prüft jeden DB0DAM-950-Pflichtregler einschließlich PCM 165/165, Headphone-Routing, AVC, BASS, DAP-/I2S-Signalweg und dass `asactl` erst nach erfolgreicher Konfiguration läuft.
 - Die Bootsimulation prüft die Deaktivierung von `vc4-kms-v3d,cma-512`, den Erhalt fremder Overlays und die Idempotenz.
 

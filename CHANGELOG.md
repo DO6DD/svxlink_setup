@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Logrotate rotiert wieder als root: `su svxlink svxlink` wurde aus der erzeugten Konfiguration entfernt, weil es im root-eigenen `/var/log` keine Datei `svxlink.1` anlegen kann. `copytruncate` sowie Eigentümer und Modus der aktiven Logdatei bleiben unverändert.
+
+- ELENATA-Post-Boot-Helper korrigiert: Die Unit ist nun der einzige produktive Ladeweg für die Mixerumgebung über `EnvironmentFile=`. Das zusätzliche `source "${ELENATA_ALSA_CONFIG_FILE}"`, das ohne gesetzte Variable mit `unbound variable` abbrach, wurde entfernt. Kein realer ELENATA-Hardwaretest wird damit behauptet.
+
 - Deutsche Sounds auf das vollständige passwortgeschützte Nextcloud-Archiv umgestellt. Passwortabfrage, temporäre Curl-Konfiguration, SHA-256-Prüfung, sichere Installation ausschließlich aus `sounds/de_DE/` sowie Aufräumen bei Erfolg und Fehler ergänzt; die englische Heather-Quelle bleibt unverändert.
 
 - Paketinstallation um die vollständige angeforderte Abhängigkeitsmenge erweitert. Nach einem Debian-13-arm64-Test werden `libsigc++-2.0-dev` und `libgcrypt20-dev` direkt installiert: Die frühere Alias-/Kandidatenprüfung meldete sie fälschlich als nicht verfügbar. Der reale Neuinstallationstest wurde dort abgebrochen und muss vollständig wiederholt werden. `raspberrypi-kernel-headers` wurde entfernt, weil es auf dem realen Zielsystem nicht verfügbar war und ELENATA kein externes Kernelmodul baut.
