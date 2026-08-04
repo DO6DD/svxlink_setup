@@ -56,6 +56,63 @@ TERM=xterm-256color SVXLINK_TEST_MODE=true SVXLINK_TEST_FORCE_INTERACTIVE_OUTPUT
 ' _ "${ROOT}" >"${download_output}" 2>&1
 if grep -Fq '[DOWNLOAD]' "${download_output}"; then pass 'download without known size uses download activity indicator'; else fail 'download without known size must use activity indicator'; fi
 
+known_size_output="${TEMP_DIR}/download-known-size.out"
+TERM=xterm-256color SVXLINK_TEST_MODE=true SVXLINK_TEST_FORCE_INTERACTIVE_OUTPUT=true SVXLINK_TEST_FORCE_ACTIVITY=true SVXLINK_TEST_MARKER="${TEMP_DIR}/legacy-write-out-used" SVXLINK_INSTALL_LOG_DIR="${TEMP_DIR}/download-known-size-install" bash -c '
+    source "$1/svxlink_setup.sh"
+    curl() {
+        local argument head=false header_file="" output_file=""
+        while (($#)); do
+            argument=$1
+            case ${argument} in
+                --head) head=true; shift ;;
+                --dump-header) header_file=$2; shift 2 ;;
+                --output) output_file=$2; shift 2 ;;
+                --write-out) : >"${SVXLINK_TEST_MARKER}"; return 2 ;;
+                *) shift ;;
+            esac
+        done
+        if ${head}; then printf "Content-Length: 1000\\r\\n" >"${header_file}"; return 0; fi
+        : >"${output_file}"
+        for _ in 1 2 3 4; do head -c 250 /dev/zero >>"${output_file}"; sleep 0.08; done
+    }
+    download_logged "Testarchiv" "$2/archive.tar.bz2" --fail https://example.invalid/archive
+' _ "${ROOT}" "${TEMP_DIR}" >"${known_size_output}" 2>&1
+if grep -Fq '[DOWNLOAD] Testarchiv:   0 %' "${known_size_output}" && grep -Eq '\[DOWNLOAD\] Testarchiv: +([1-9][0-9]?|100) %' "${known_size_output}" && [[ ! -e ${TEMP_DIR}/legacy-write-out-used ]]; then pass 'compatible HEAD headers enable percent progress without write-out variable'; else fail 'known download size must use header-based percent progress'; fi
+
+unknown_size_output="${TEMP_DIR}/download-unknown-size.out"
+TERM=xterm-256color SVXLINK_TEST_MODE=true SVXLINK_TEST_FORCE_INTERACTIVE_OUTPUT=true SVXLINK_TEST_FORCE_ACTIVITY=true SVXLINK_INSTALL_LOG_DIR="${TEMP_DIR}/download-unknown-size-install" bash -c '
+    source "$1/svxlink_setup.sh"
+    curl() {
+        local argument head=false output_file=""
+        while (($#)); do
+            argument=$1
+            case ${argument} in --head) head=true; shift ;; --output) output_file=$2; shift 2 ;; *) shift ;; esac
+        done
+        if ${head}; then printf "optional size lookup failed\\n" >&2; return 22; fi
+        sleep 0.15
+        printf archive >"${output_file}"
+    }
+    download_logged "Archiv ohne Größe" "$2/archive-without-size.tar.bz2" --fail https://example.invalid/archive
+' _ "${ROOT}" "${TEMP_DIR}" >"${unknown_size_output}" 2>&1
+unknown_size_log=$(find "${TEMP_DIR}/download-unknown-size-install" -name 'install-*.log' -print -quit)
+if grep -Fq '[DOWNLOAD]' "${unknown_size_output}" && ! grep -Fq 'optional size lookup failed' "${unknown_size_log}"; then pass 'failed optional size lookup falls back silently to spinner'; else fail 'failed optional size lookup must not pollute logs'; fi
+
+download_failure_output="${TEMP_DIR}/download-failure.out"
+download_failure_status=0
+SVXLINK_TEST_MODE=true SVXLINK_INSTALL_LOG_DIR="${TEMP_DIR}/download-failure-install" bash -c '
+    source "$1/svxlink_setup.sh"
+    curl() {
+        local argument head=false
+        while (($#)); do argument=$1; [[ ${argument} == --head ]] && head=true; shift; done
+        ${head} && return 22
+        printf "actual download failure\\n" >&2
+        return 22
+    }
+    download_logged "Defektes Archiv" "$2/defekt.tar.bz2" --fail https://example.invalid/archive
+' _ "${ROOT}" "${TEMP_DIR}" >"${download_failure_output}" 2>&1 || download_failure_status=$?
+download_failure_log=$(find "${TEMP_DIR}/download-failure-install" -name 'install-*.log' -print -quit)
+if [[ ${download_failure_status} == 22 ]] && grep -Fq '[FEHLER] Defektes Archiv konnten nicht heruntergeladen werden.' "${download_failure_output}" && grep -Fq 'actual download failure' "${download_failure_log}"; then pass 'actual download failure remains visible and logged'; else fail 'actual download failure must remain detectable'; fi
+
 spinner_failure="${TEMP_DIR}/spinner-failure.out"
 spinner_status=0
 TERM=xterm-256color SVXLINK_TEST_MODE=true SVXLINK_TEST_FORCE_INTERACTIVE_OUTPUT=true SVXLINK_TEST_FORCE_ACTIVITY=true SVXLINK_INSTALL_LOG_DIR="${TEMP_DIR}/spinner-failure-install" bash -c '

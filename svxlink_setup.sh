@@ -1405,11 +1405,18 @@ start_download_progress() {
 }
 
 download_logged() {
-    local label=$1 target=$2 total command_pid status
+    local label=$1 target=$2 total=0 headers='' command_pid status
     shift 2
     start_install_log || return 1
     print_info "${label} werden heruntergeladen ..."
-    total=$(curl "$@" --head --output /dev/null --silent --show-error --location --write-out '%{content_length_download}' 2>>"${INSTALL_LOG_FILE}" || true)
+    if headers=$(mktemp); then
+        # A HEAD request transfers no archive body.  Its failure is optional: do
+        # not pollute the installation log and fall back to the activity spinner.
+        if curl "$@" --head --output /dev/null --silent --show-error --location --dump-header "${headers}" >/dev/null 2>&1; then
+            total=$(awk 'tolower($1) == "content-length:" { value=$2 } END { gsub(/\r/, "", value); print value }' "${headers}")
+        fi
+        rm -f -- "${headers}"
+    fi
     [[ ${total} =~ ^[1-9][0-9]*$ ]] || total=0
     curl "$@" --output "${target}" >>"${INSTALL_LOG_FILE}" 2>&1 & command_pid=$!
     ACTIVE_COMMAND_PID=${command_pid}
