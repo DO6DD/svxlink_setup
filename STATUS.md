@@ -3,7 +3,7 @@
 ## Implementiert
 
 - SvxLink wird bewusst aus dem offiziellen Upstream-Repository auf `master` gebaut; Buildstatus, Commit, Version, Plattform und Optionen steuern den Build-Skip.
-- Die vollständige angeforderte Abhängigkeitssammlung wird installiert. `raspberrypi-kernel-headers` wurde nach einem realen Neuinstallationstest entfernt: Auf dem Zielsystem war kein Kandidat verfügbar und ELENATA benötigt wegen des vorhandenen `fe-pi-audio`-Overlays kein externes Kernelmodul.
+- Die vollständige angeforderte Abhängigkeitssammlung wird installiert. `raspberrypi-kernel-headers` wurde nach einem realen Neuinstallationstest entfernt: Auf dem Zielsystem war kein Kandidat verfügbar und ELENATA benötigt wegen des vorhandenen `fe-pi-audio`-Overlays kein externes Kernelmodul. Debian 13 arm64 stellte `libsigc++-2.0-dev` und `libgcrypt20-dev` direkt bereit; die fehlerhafte Alias-/Kandidatenprüfung wurde durch direkte Installation dieser Namen ersetzt. Der reale Neuinstallationstest wurde dabei abgebrochen und muss vollständig wiederholt werden.
 - `-D` schreibt ein geschütztes Debuglog; read-only Aufrufe und Hauptmenü funktionieren ohne Root, schreibende Aktionen verlangen Root erst vor der Änderung.
 - ELENATA verwaltet die Bootwerte idempotent, deaktiviert `vc4-kms-v3d`, behält feste GPIOD-Pins bei und richtet bei fehlender Karte `Audio` eine einmalige ALSA-Post-Boot-Konfiguration ein.
 - Die vollständigen DB0DAM-950-Mixer-, AVC-, BASS- und Signalwegwerte sind als Pflichtregler implementiert. DB0VL-Pegel sind nur stationsspezifisch und kein Standard.

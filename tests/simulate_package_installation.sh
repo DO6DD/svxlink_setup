@@ -12,9 +12,6 @@ trap - ERR
 failures=0 successes=0
 pass() { printf '[ OK ] %s\n' "$1"; successes=$((successes + 1)); }
 fail() { printf '[FEHLER] %s\n' "$1" >&2; failures=$((failures + 1)); }
-package_has_candidate() {
-    case $1 in libsigc++-dev|libgcrypt-dev) return 1 ;; *) return 0 ;; esac
-}
 run_logged() { printf '%s\n' "$*" >>"${TEMP_DIR}/commands"; }
 
 required_packages=(
@@ -31,7 +28,8 @@ general_command=$(tail -n 1 "${TEMP_DIR}/commands")
 for package in "${required_packages[@]}"; do
     if [[ ${general_command} == *" ${package}"* ]]; then pass "general package ${package}"; else fail "missing general package ${package}"; fi
 done
-if [[ ${general_command} == *'libsigc++-2.0-dev'* && ${general_command} == *'libgcrypt20-dev'* ]]; then pass 'requested compatibility packages are resolved'; else fail 'compatibility packages are not resolved'; fi
+if [[ ${general_command} == *' libsigc++-2.0-dev'* && ${general_command} == *' libgcrypt20-dev'* ]]; then pass 'concrete Debian compatibility packages are installed'; else fail 'concrete Debian compatibility packages are missing'; fi
+if [[ ${general_command} != *' libsigc++-dev'* && ${general_command} != *' libgcrypt-dev'* ]]; then pass 'obsolete package aliases are not installed'; else fail 'obsolete package aliases are installed'; fi
 
 printf 'Erfolgreich: %d\nFehler: %d\n' "${successes}" "${failures}"
 (( failures == 0 ))

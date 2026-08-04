@@ -30,7 +30,7 @@
 - Ein erfolgreicher SvxLink-Build speichert atomar `/var/lib/svxlink-setup/build-state`. Der normale Updatepfad überspringt den Build nur bei passendem Commit, Version, Plattform, Compiler und Buildoptionssignatur; Force baut immer neu.
 - SvxLink wird bewusst aus `https://github.com/sm0svx/svxlink.git` auf dem offiziellen Branch `master` bezogen. Der Installer wählt keine Release-Tags automatisch aus.
 - Die allgemeine Paketinstallation enthält die vollständige angeforderte Build-, Audio-, SDR-, I²C-, Dokumentations- und Diagnoseausstattung. `raspberrypi-kernel-headers` gehört nicht dazu: Ein realer Neuinstallationstest zeigte keinen APT-Kandidaten und das Paket ist für ELENATA nicht erforderlich, weil `fe-pi-audio` kein externes Kernelmodul baut.
-- Auf Debian 12 und Debian 13 ist `libgcrypt-dev` ein virtuelles Paket von `libgcrypt20-dev`; `libsigc++-dev` wird bei fehlendem konkreten Kandidaten ausdrücklich durch `libsigc++-2.0-dev` erfüllt und protokolliert.
+- Debian 13 arm64 stellt `libsigc++-2.0-dev` und `libgcrypt20-dev` direkt bereit. Die frühere Alias-/Kandidatenprüfung meldete diese Pakete fälschlich als nicht verfügbar; der Installer installiert deshalb nur die konkreten Debian-Paketnamen direkt. Der reale Neuinstallationstest wurde an dieser Stelle abgebrochen und steht vollständig erneut an.
 
 ## Protokollierung
 

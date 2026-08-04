@@ -726,35 +726,8 @@ install_packages() {
         libssl-dev libvorbis-dev logrotate lsof make mc rtl-sdr tar tcl-dev vorbis-tools
     )
 
-    resolve_package_alias packages libsigc++-dev libsigc++-2.0-dev
-    resolve_package_alias packages libgcrypt-dev libgcrypt20-dev
-
     run_logged 'Paketquellen werden aktualisiert' apt-get update || return 1
     run_logged 'Grundabhängigkeiten werden installiert' env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "${packages[@]}"
-}
-
-package_has_candidate() {
-    apt-cache show "$1" 2>/dev/null | grep -q '^Package:'
-}
-
-append_package_once() {
-    local -n target=$1
-    local package=$2 existing
-    for existing in "${target[@]}"; do [[ ${existing} == "${package}" ]] && return 0; done
-    target+=("${package}")
-}
-
-resolve_package_alias() {
-    local target_name=$1
-    local requested=$2 fallback=$3
-    if package_has_candidate "${requested}"; then
-        append_package_once "${target_name}" "${requested}"
-    elif package_has_candidate "${fallback}"; then
-        log "Paket ${requested} wird durch ${fallback} erfüllt."
-        append_package_once "${target_name}" "${fallback}"
-    else
-        die "Required package or compatibility replacement is unavailable: ${requested} / ${fallback}."
-    fi
 }
 
 install_packages_for_profile() {
