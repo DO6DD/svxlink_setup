@@ -39,6 +39,8 @@ Erwartet und real bestätigt: unveränderter Quellstand und Releaseversion `26.0
 - Voraussetzungen: Der bisherige Buildordner `/root/svxlink/build` wurde für den Vollbuild entfernt oder verschoben, der Buildstatus unter `/var/lib/svxlink-setup/build-state` entfernt.
 - Tatsächlich bestätigt: vollständige Objektkompilierung im Buildlog, fortlaufende echte CMake-Prozentanzeige im Terminal, Installation, `svxlink --version` gleich `1.10.1@26.05.1`, erkannte Releaseversion `26.05.1`, gültiger Buildstatus, idempotente Bootkonfiguration ohne doppelte verwaltete Einträge und deaktiviertes `vc4-kms-v3d`.
 - `--check` lief ohne internen Shellfehler; die fehlende Karte `Audio` war ohne Zielhardware erwartbar.
+- Nach einer vollständigen Neuinstallation und einem Neustart wurde der ELENATA-Postboot-Dienst real geprüft: Er startete korrekt, enthielt keine Referenz mehr auf `ELENATA_ALSA_CONFIG_FILE`, wartete bei fehlender Karte 45 Versuche beziehungsweise rund 90 Sekunden und endete dann kontrolliert mit `Audio did not appear before timeout`; die Pending-Datei blieb mit `root:root` und Modus `0600` bestehen. Das ist ausdrücklich kein Erfolgstest auf ELENATA-/Fe-Pi-Hardware: Mixerwerte, erfolgreiche `asactl`-Speicherung und das Entfernen des Pending-Markers bleiben offen.
+- Die reale Neuinstallation bestätigte außerdem die idempotente Überführung der bisherigen `/boot/firmware/config.txt`: alte konkurrierende Werte wurden entfernt oder deaktiviert, die ELENATA-Zielwerte stehen einmalig im wirksamen `[all]`-Abschnitt.
 - Grenzen: Dieser Test bestätigt weder ELENATA-ALSA, Mixer, `asactl`, Aufnahme/Wiedergabe, GPIO, SQL, PTT noch Squelch.
 
 ### Gefundene und behobene Fehler

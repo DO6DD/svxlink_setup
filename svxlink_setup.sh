@@ -27,7 +27,7 @@ if [[ ${SVXLINK_TEST_MODE:-false} == true ]]; then
     driver_source_path=${DRIVER_SOURCE_DIR:-}
     alsa_state_path=${ALSA_STATE_FILE:-}
     build_state_path=${SVXLINK_BUILD_STATE_FILE:-/var/lib/svxlink-setup/build-state}
-    install_log_dir_path=${SVXLINK_INSTALL_LOG_DIR:-/var/log/svxlink-setup}
+    install_log_dir_path=${SVXLINK_INSTALL_LOG_DIR:-/tmp/svxlink-setup-test/logs}
 else
     svxlink_config_path=/etc/svxlink/svxlink.conf
     svxlink_log_path=/var/log/svxlink
@@ -117,6 +117,10 @@ DEBUG_MODE=false
 DEBUG_FD=""
 DEBUG_STDOUT_FD=""
 DEBUG_STDERR_FD=""
+TERMINAL_FD=""
+ORIGINAL_OUTPUT_IS_TTY=false
+ACTIVITY_PID=""
+ACTIVE_COMMAND_PID=""
 BUILD_PERFORMED=false
 ELENATA_ALSA_CARD_AVAILABLE=false
 CMAKE_OPTIONS=(
@@ -127,8 +131,26 @@ CMAKE_OPTIONS=(
     -DWITH_SYSTEMD=ON
 )
 
+if [[ -t 1 || ${SVXLINK_TEST_FORCE_INTERACTIVE_OUTPUT:-false} == true ]]; then
+    ORIGINAL_OUTPUT_IS_TTY=true
+    exec {TERMINAL_FD}>&1
+fi
+
+terminal_is_interactive() {
+    ${ORIGINAL_OUTPUT_IS_TTY} && [[ ${TERM:-dumb} != dumb ]]
+}
+
 output_uses_color() {
-    [[ -t 1 && ${TERM:-dumb} != dumb && -z ${NO_COLOR:-} ]]
+    terminal_is_interactive && [[ -z ${NO_COLOR:-} ]]
+}
+
+terminal_printf() {
+    # shellcheck disable=SC2059
+    if [[ -n ${TERMINAL_FD} ]]; then
+        printf "$@" >&${TERMINAL_FD}
+    else
+        printf "$@"
+    fi
 }
 
 print_colored() {
@@ -142,7 +164,7 @@ print_colored() {
         esac
         reset='\033[0m'
     fi
-    printf '%b[%s]%b %s\n' "${prefix}" "${label}" "${reset}" "${message}"
+    terminal_printf '%b[%s]%b %s\n' "${prefix}" "${label}" "${reset}" "${message}"
 }
 
 print_info() { print_colored cyan 'INFO' "$*"; }
@@ -151,6 +173,34 @@ print_warning() { print_colored yellow 'WARN' "$*"; }
 print_error() { print_colored red 'FEHLER' "$*" >&2; }
 print_skip() { print_colored '' '  - ' "$*"; }
 print_section() { printf '\n============================================================\n%s\n============================================================\n' "$*"; }
+
+print_prompt() {
+    local text=$1 prefix='' reset=''
+    if output_uses_color; then prefix='\033[1;35m'; reset='\033[0m'; fi
+    if [[ -n ${TERMINAL_FD} ]]; then
+        terminal_printf '%b[EINGABE]%b %s' "${prefix}" "${reset}" "${text}"
+    else
+        printf '%b[EINGABE]%b %s' "${prefix}" "${reset}" "${text}" >&2
+    fi
+}
+
+prompt_value() {
+    local variable=$1 text=$2
+    local -n result=${variable}
+    print_prompt "${text}"
+    IFS= read -r result
+}
+
+prompt_secret() {
+    # shellcheck disable=SC2034
+    local variable=$1 text=$2 trace_was_enabled=false
+    local -n result=${variable}
+    [[ $- == *x* ]] && { trace_was_enabled=true; set +x; }
+    print_prompt "${text}"
+    # shellcheck disable=SC2034
+    if IFS= read -r -s result; then terminal_printf '\n'; else terminal_printf '\n'; [[ ${trace_was_enabled} != true ]] || set -x; return 1; fi
+    [[ ${trace_was_enabled} != true ]] || set -x
+}
 
 show_header() {
     local width=63 text='SVXLINK SETUP' padding_left padding_right
@@ -196,6 +246,8 @@ require_base_tools() {
 
 on_error() {
     local exit_code=$?
+    [[ -z ${ACTIVE_COMMAND_PID} ]] || kill "${ACTIVE_COMMAND_PID}" 2>/dev/null || true
+    stop_activity_indicator
     log "ERROR: command failed at line ${BASH_LINENO[0]} (exit ${exit_code})"
     exit "${exit_code}"
 }
@@ -222,7 +274,7 @@ start_debug_log() {
     exec > >(tee -a "${DEBUG_LOG_FILE}" >&${DEBUG_STDOUT_FD}) \
         2> >(tee -a "${DEBUG_LOG_FILE}" >&${DEBUG_STDERR_FD})
     BASH_XTRACEFD=${DEBUG_FD}
-    PS4='+ ${BASH_SOURCE##*/}:${LINENO}:${FUNCNAME[0]:-main}: exit=${?}: '
+    PS4='+ ${BASH_SOURCE[0]:-main}:${LINENO}:${FUNCNAME[0]:-main}: exit=${?}: '
     export BASH_XTRACEFD PS4
     set -x
     print_info "Debuglog: ${DEBUG_LOG_FILE}"
@@ -585,14 +637,11 @@ write_german_sound_curl_config() {
             if ${trace_was_enabled}; then set -x; fi
             return 1
         fi
-        printf 'Passwort für die deutschen Sounds: ' >&2
-        if ! IFS= read -r -s password; then
-            printf '\n' >&2
+        if ! prompt_secret password 'Passwort für die deutschen Sounds: '; then
             print_error 'Passwort für die deutschen Sounds konnte nicht gelesen werden.'
             if ${trace_was_enabled}; then set -x; fi
             return 1
         fi
-        printf '\n' >&2
     fi
     if [[ -z ${password} ]]; then
         print_error 'Für den Download der deutschen Sounds ist ein Passwort erforderlich.'
@@ -609,7 +658,7 @@ write_german_sound_curl_config() {
 }
 
 install_german_sounds() (
-    local replace_existing=${1:-false} target temporary archive curl_config expected_sha=${GERMAN_SOUND_SHA256}
+    local replace_existing=${1:-false} target temporary archive curl_config expected_sha=${GERMAN_SOUND_SHA256} attempt
     target="${SVXLINK_SOUNDS_DIR}/de_DE"
     sound_package_already_present de_DE Deutsche && return 0
     [[ ! -e ${target} || ${replace_existing} == true ]] || replace_existing=true
@@ -621,11 +670,20 @@ install_german_sounds() (
     trap 'rm -rf "${temporary}"' EXIT
     archive="${temporary}/svxlink-sounds-de_DE-nextcloud.tar.bz2"
     curl_config="${temporary}/curl.conf"
-    write_german_sound_curl_config "${curl_config}" || return 1
-    if ! run_logged 'Deutsche Sounds werden heruntergeladen' curl --config "${curl_config}" --fail --location --silent --show-error --proto '=https' --tlsv1.2 --retry 2 --connect-timeout 20 -o "${archive}" "${GERMAN_SOUND_URL}"; then
-        log 'Download der deutschen Sounds fehlgeschlagen. Bei HTTP 401 bitte Passwort und Zugriffsrechte prüfen.'
-        return 1
-    fi
+    for attempt in 1 2 3; do
+        write_german_sound_curl_config "${curl_config}" || return 1
+        if download_logged 'Deutsche Sounds' "${archive}" --config "${curl_config}" --fail --location --silent --show-error --proto '=https' --tlsv1.2 --retry 2 --connect-timeout 20 "${GERMAN_SOUND_URL}"; then
+            break
+        fi
+        rm -f -- "${archive}" "${curl_config}"
+        if (( attempt < 3 )); then
+            print_warning "Passwort nicht akzeptiert oder Download fehlgeschlagen. Noch $((3 - attempt)) Versuche."
+        else
+            print_warning 'Download der deutschen Sounds fehlgeschlagen. Bei HTTP 401 bitte Passwort und Zugriffsrechte prüfen.'
+            print_warning 'Deutsche Sounds wurden nicht installiert. Sie können später im Hauptmenü nachgeladen werden.'
+            return 1
+        fi
+    done
     install_sound_archive "${archive}" "${expected_sha}" "${GERMAN_SOUND_ROOT}" de_DE "${replace_existing}"
 )
 
@@ -646,7 +704,7 @@ install_english_sounds() (
     temporary=$(mktemp -d)
     trap 'rm -rf "${temporary}"' EXIT
     archive="${temporary}/svxlink-sounds-en_US-heather-16k-25.05.tar.bz2"
-    if ! run_logged 'Englische Sounds werden heruntergeladen' curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 --retry 2 --connect-timeout 20 -o "${archive}" "${ENGLISH_SOUND_URL}"; then
+    if ! download_logged 'Englische Sounds' "${archive}" --fail --location --silent --show-error --proto '=https' --tlsv1.2 --retry 2 --connect-timeout 20 "${ENGLISH_SOUND_URL}"; then
         log 'Download der englischen Sounds fehlgeschlagen.'
         return 1
     fi
@@ -674,7 +732,7 @@ activate_sound_language() {
         return 1
     fi
     if ${interactive}; then
-        read -r -p "${language} jetzt aktivieren? [j/N]: " answer
+        prompt_value answer "${language} jetzt aktivieren? [j/N]: "
         [[ ${answer} == j || ${answer} == J ]] || { log "Keine Konfiguration geändert."; return 0; }
     fi
     backup_file "${SVXLINK_CONFIG}"
@@ -804,7 +862,7 @@ ensure_svxlink_account() {
 
 prompt_callsign() {
     while :; do
-        read -r -p "Rufzeichen, Relais- oder Knotenname: " CALLSIGN
+        prompt_value CALLSIGN 'Rufzeichen, Relais- oder Knotenname: '
         CALLSIGN=${CALLSIGN^^}
         [[ ${CALLSIGN} =~ ^[A-Z0-9][A-Z0-9_-]{2,15}$ ]] && return 0
         log "Ungültige Eingabe. Erlaubt sind 3 bis 16 Großbuchstaben, Ziffern, Bindestrich und Unterstrich."
@@ -828,7 +886,7 @@ choose_hardware_profile() {
     log "  4) ELENATA Wolfson / Fe-Pi Audio"
 
     while :; do
-        read -r -p "Auswahl (0 bis 4): " HARDWARE_PROFILE
+        prompt_value HARDWARE_PROFILE 'Auswahl (0 bis 4): '
         [[ ${HARDWARE_PROFILE} =~ ^[0-4]$ ]] || \
             { log "Ungültige Auswahl. Erlaubt sind 0 bis 4."; continue; }
         break
@@ -836,7 +894,7 @@ choose_hardware_profile() {
 
     if [[ ${HARDWARE_PROFILE} == 4 ]]; then
         while :; do
-            read -r -p "Zweiten Anschluss vorbereiten (j/n): " answer
+            prompt_value answer 'Zweiten Anschluss vorbereiten (j/n): '
             case ${answer,,} in
                 j|ja|y|yes) SECOND_CONNECTOR=true; break ;;
                 n|nein|no) break ;;
@@ -882,7 +940,7 @@ prompt_level() {
     local default=$2
     local value
     while :; do
-        read -r -p "${label} (0-15, Standard ${default}): " value
+        prompt_value value "${label} (0-15, Standard ${default}): "
         value=${value:-${default}}
         [[ ${value} =~ ^([0-9]|1[0-5])$ ]] && { printf '%s\n' "${value}"; return 0; }
         log "Ungültiger Pegel. Erlaubt ist 0 bis 15."
@@ -1101,13 +1159,13 @@ EOF
         changed=true
     fi
     rm -f "${unit_temporary}"
-    if ${changed}; then systemctl daemon-reload; fi
+    if ${changed}; then run_logged 'Systemd-Konfiguration wird neu geladen' systemctl daemon-reload || return 1; fi
 }
 
 install_elenata_alsa_postboot() {
     install_elenata_alsa_runtime
     install -m 0600 /dev/null "${ELENATA_ALSA_PENDING_FILE}"
-    systemctl enable svxlink-setup-elenata-alsa.service
+    run_logged 'ELENATA-Postboot-Dienst wird aktiviert' systemctl enable svxlink-setup-elenata-alsa.service
 }
 
 clear_elenata_alsa_postboot() {
@@ -1284,13 +1342,79 @@ start_install_log() {
     if [[ ${SVXLINK_TEST_MODE:-false} != true ]]; then chown root:root "${INSTALL_LOG_FILE}"; fi
 }
 
+activity_indicator_enabled() {
+    terminal_is_interactive || [[ ${SVXLINK_TEST_FORCE_ACTIVITY:-false} == true ]]
+}
+
+start_activity_indicator() {
+    local label=$1 command_pid=$2 kind='WORK'
+    activity_indicator_enabled || return 0
+    [[ ${label,,} == *herunter* ]] && kind='DOWNLOAD'
+    (
+        local frame=0
+        local -a frames=('|' '/' '-' "\\")
+        while kill -0 "${command_pid}" 2>/dev/null; do
+            terminal_printf '\r[%s] %s %s' "${kind}" "${frames[frame]}" "${label}"
+            frame=$(( (frame + 1) % ${#frames[@]} ))
+            sleep 0.1
+        done
+    ) &
+    ACTIVITY_PID=$!
+}
+
+stop_activity_indicator() {
+    [[ -n ${ACTIVITY_PID} ]] || return 0
+    kill "${ACTIVITY_PID}" 2>/dev/null || true
+    wait "${ACTIVITY_PID}" 2>/dev/null || true
+    ACTIVITY_PID=""
+    activity_indicator_enabled && terminal_printf '\r\033[K'
+}
+
+start_download_progress() {
+    local label=$1 command_pid=$2 target=$3 total=$4
+    activity_indicator_enabled || return 0
+    ( local size percent; while kill -0 "${command_pid}" 2>/dev/null; do size=$(stat -c %s "${target}" 2>/dev/null || printf 0); percent=$(( size * 100 / total )); (( percent <= 100 )) || percent=100; terminal_printf '\r[DOWNLOAD] %s: %3d %%' "${label}" "${percent}"; sleep 0.1; done ) &
+    ACTIVITY_PID=$!
+}
+
+download_logged() {
+    local label=$1 target=$2 total command_pid status
+    shift 2
+    start_install_log || return 1
+    print_info "${label} werden heruntergeladen ..."
+    total=$(curl "$@" --head --output /dev/null --silent --show-error --location --write-out '%{content_length_download}' 2>>"${INSTALL_LOG_FILE}" || true)
+    [[ ${total} =~ ^[1-9][0-9]*$ ]] || total=0
+    curl "$@" --output "${target}" >>"${INSTALL_LOG_FILE}" 2>&1 & command_pid=$!
+    ACTIVE_COMMAND_PID=${command_pid}
+    if (( total > 0 )); then start_download_progress "${label}" "${command_pid}" "${target}" "${total}"; else start_activity_indicator "${label} werden heruntergeladen" "${command_pid}"; fi
+    if wait "${command_pid}"; then status=0; else status=$?; fi
+    ACTIVE_COMMAND_PID=""; stop_activity_indicator
+    if (( status == 0 )); then print_success "${label} wurden heruntergeladen"; else print_error "${label} konnten nicht heruntergeladen werden."; fi
+    return "${status}"
+}
+
+on_signal() {
+    local exit_code=$1
+    [[ -z ${ACTIVE_COMMAND_PID} ]] || kill "${ACTIVE_COMMAND_PID}" 2>/dev/null || true
+    stop_activity_indicator
+    exit "${exit_code}"
+}
+trap 'on_signal 130' INT
+trap 'on_signal 143' TERM
+
 run_logged() {
-    local label=$1 offset status
+    local label=$1 offset status command_pid
     shift
     start_install_log || return 1
     print_info "${label} ..."
     offset=$(wc -c <"${INSTALL_LOG_FILE}")
-    "$@" >>"${INSTALL_LOG_FILE}" 2>&1 && status=0 || status=$?
+    "$@" >>"${INSTALL_LOG_FILE}" 2>&1 &
+    command_pid=$!
+    ACTIVE_COMMAND_PID=${command_pid}
+    start_activity_indicator "${label}" "${command_pid}"
+    if wait "${command_pid}"; then status=0; else status=$?; fi
+    ACTIVE_COMMAND_PID=""
+    stop_activity_indicator
     append_install_output_to_debug_log "${offset}"
     if (( status == 0 )); then
         print_success "${label}"
@@ -1300,7 +1424,7 @@ run_logged() {
     printf 'Letzte Protokollzeilen:\n'
     tail -n 30 "${INSTALL_LOG_FILE}" || true
     printf 'Vollständiges Protokoll: %s\n' "${INSTALL_LOG_FILE}"
-    return 1
+    return "${status}"
 }
 
 run_build_logged() {
@@ -1310,8 +1434,8 @@ run_build_logged() {
     print_info "${label} ..."
     offset=$(wc -c <"${INSTALL_LOG_FILE}")
     if "$@" 2>&1 | tee -a "${INSTALL_LOG_FILE}" | while IFS= read -r line; do
-        if [[ ( -t 1 || ${SVXLINK_TEST_FORCE_BUILD_PROGRESS:-false} == true ) && ${line} =~ \[[[:space:]]*([0-9]+)%\] ]]; then
-            printf '\r[BUILD] %3d %%' "${BASH_REMATCH[1]}"
+        if { terminal_is_interactive || [[ ${SVXLINK_TEST_FORCE_BUILD_PROGRESS:-false} == true ]]; } && [[ ${line} =~ \[[[:space:]]*([0-9]+)%\] ]]; then
+            terminal_printf '\r[BUILD] %3d %%' "${BASH_REMATCH[1]}"
         fi
     done; then
         status=0
@@ -1319,7 +1443,7 @@ run_build_logged() {
         status=${PIPESTATUS[0]}
     fi
     append_install_output_to_debug_log "${offset}"
-    if [[ -t 1 || ${SVXLINK_TEST_FORCE_BUILD_PROGRESS:-false} == true ]]; then printf '\n'; fi
+    if terminal_is_interactive || [[ ${SVXLINK_TEST_FORCE_BUILD_PROGRESS:-false} == true ]]; then terminal_printf '\n'; fi
     if (( status == 0 )); then
         print_success "${label}"
         return 0
@@ -1543,9 +1667,9 @@ EOF
 }
 
 enable_svxlink_service() {
-    systemctl daemon-reload
+    run_logged 'Systemd-Konfiguration wird neu geladen' systemctl daemon-reload || return 1
     systemctl cat svxlink.service >/dev/null 2>&1 || die "SvxLink systemd service was not installed."
-    systemctl enable svxlink.service
+    run_logged 'SvxLink-Dienst wird aktiviert' systemctl enable svxlink.service
 }
 
 check_item() {
@@ -1726,7 +1850,7 @@ install_sound_interactively() {
     local language=$1 target replace_existing=false answer
     target="${SVXLINK_SOUNDS_DIR}/${language}"
     if [[ -e ${target} ]] && ! sound_directory_has_wav "${target}"; then
-        read -r -p "${target} exists but is unusable. Backup and replace it? [j/N]: " answer
+        prompt_value answer "${target} exists but is unusable. Backup and replace it? [j/N]: "
         [[ ${answer} == j || ${answer} == J ]] || { log "Keine Sounddateien geändert."; return 0; }
         replace_existing=true
     fi
@@ -1764,7 +1888,7 @@ EOF
     if ${ACTION_YES}; then
         return 0
     fi
-    read -r -p "Installation jetzt starten? [j/N]: " answer
+    prompt_value answer 'Installation jetzt starten? [j/N]: '
     [[ ${answer} == j || ${answer} == J ]]
 }
 
@@ -1901,7 +2025,7 @@ BACKUP
 3) Vorhandene Backups anzeigen
 4) Zurück
 EOF
-        read -r -p "Auswahl: " choice || return 0
+        prompt_value choice 'Auswahl: ' || return 0
         case ${choice} in
             1) create_full_backup ;;
             2)
@@ -1910,9 +2034,9 @@ EOF
                     continue
                 fi
                 list_backups
-                read -r -p "Backupname zur Wiederherstellung: " selected
+                prompt_value selected 'Backupname zur Wiederherstellung: '
                 [[ -d ${SVXLINK_BACKUP_DIR}/${selected} ]] || { log "Backup nicht gefunden."; continue; }
-                read -r -p "Aktuelle Installation wird vorher gesichert und vorhandene Dateien ersetzt. Fortfahren? [j/N]: " answer
+                prompt_value answer 'Aktuelle Installation wird vorher gesichert und vorhandene Dateien ersetzt. Fortfahren? [j/N]: '
                 [[ ${answer} == j || ${answer} == J ]] || { log "Keine Wiederherstellung durchgeführt."; continue; }
                 create_full_backup
                 cp -a "${SVXLINK_BACKUP_DIR}/${selected}/." /
@@ -1937,7 +2061,7 @@ INSTALLIEREN / AKTUALISIEREN
 2) Erzwungene Neuinstallation
 3) Zurück
 EOF
-        read -r -p "Auswahl: " choice || return 0
+        prompt_value choice 'Auswahl: ' || return 0
         case ${choice} in
             1)
                 if run_installation automatic; then return 0; else return $?; fi
@@ -1954,13 +2078,13 @@ Bibliotheken, systemd-Dateien, Standardressourcen und beide Sprachsätze.
 Konfiguration, lokale Events, systemd-Overrides und Soundanpassungen werden
 gesichert und nicht ungefragt gelöscht.
 EOF
-                read -r -p "Erzwungene Neuinstallation starten? [j/N]: " answer
+                prompt_value answer 'Erzwungene Neuinstallation starten? [j/N]: '
                 [[ ${answer} == j || ${answer} == J ]] || { log "Abgebrochen."; return 0; }
                 detect_operating_system
                 if ${IS_RASPBERRY_PI}; then
                     HARDWARE_PROFILE=$(detected_hardware_profile)
                     printf 'Erkanntes Hardwareprofil: %s) %s\n\n1) Profil beibehalten\n2) Hardwareprofil neu auswählen\n3) Abbrechen\n' "${HARDWARE_PROFILE}" "$(hardware_profile_name "${HARDWARE_PROFILE}")"
-                    read -r -p "Auswahl: " answer || return 0
+                    prompt_value answer 'Auswahl: ' || return 0
                     case ${answer} in
                         1) HARDWARE_PROFILE_PROVIDED=true ;;
                         2) choose_hardware_profile; HARDWARE_PROFILE_PROVIDED=true ;;
@@ -1988,10 +2112,10 @@ run_menu() {
     while :; do
         show_header
         show_menu
-        read -r -p "Auswahl: " choice || return 0
+        prompt_value choice 'Auswahl: ' || return 0
         case ${choice} in
             1) install_menu || print_error 'Installationsaktion wurde nicht vollständig abgeschlossen.' ;;
-            2) run_checks; read -r -p "ENTER zum Hauptmenü ..." _ ;;
+            2) run_checks; prompt_value _ 'ENTER zum Hauptmenü ...' ;;
             3) require_root_for_action --backup && backup_menu ;;
             4) if require_root_for_action --install-german-sounds; then install_sound_interactively de_DE || log 'Installation der deutschen Sounds fehlgeschlagen.'; fi ;;
             5) if require_root_for_action --install-english-sounds; then install_sound_interactively en_US || log 'Installation der englischen Sounds fehlgeschlagen.'; fi ;;
@@ -2067,6 +2191,16 @@ main() {
     esac
 }
 
+close_output_fds() {
+    stop_activity_indicator
+    [[ -z ${DEBUG_FD} ]] || exec {DEBUG_FD}>&-
+    [[ -z ${DEBUG_STDOUT_FD} ]] || exec {DEBUG_STDOUT_FD}>&-
+    [[ -z ${DEBUG_STDERR_FD} ]] || exec {DEBUG_STDERR_FD}>&-
+    [[ -z ${TERMINAL_FD} ]] || exec {TERMINAL_FD}>&-
+}
+
 if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
-    main "$@"
+    if main "$@"; then exit_code=0; else exit_code=$?; fi
+    close_output_fds
+    exit "${exit_code}"
 fi

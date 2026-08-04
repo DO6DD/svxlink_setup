@@ -34,6 +34,8 @@
 - Auf `we10-test` lief ein vollständiger Neubau im Pfad `/root/svxlink/build`, nachdem Buildordner und Buildstatus für den Test entfernt beziehungsweise gesichert wurden.
 - Die reale CMake-Prozentanzeige lief fortlaufend; die Objektkompilierung war im Buildlog sichtbar. Installation, `svxlink --version` (`1.10.1@26.05.1`), erkannte Releaseversion `26.05.1`, Buildstatus, idempotente Bootkonfiguration und `--check` ohne interne Shellfehler wurden bestätigt.
 - Es war kein ELENATA-Board vorhanden. Die fehlende Karte `Audio` war daher erwartet; ALSA, Mixer, Audio, GPIO, Squelch und PTT wurden nicht bestätigt.
+- Real bestätigt nach Neuinstallation und Neustart mit ELENATA-Profil: Der Postboot-Dienst startet ohne den früheren Fehler `ELENATA_ALSA_CONFIG_FILE: unbound variable`, prüft die fehlende Karte `Audio` 45-mal über rund 90 Sekunden und beendet sich dann kontrolliert mit `Audio did not appear before timeout`. Der Pending-Marker bleibt dabei erhalten. Dies bestätigt ausschließlich den Fehlerpfad „ELENATA-Profil installiert, Karte fehlt“; ein Erfolgstest mit vorhandener Karte, gesetzten Mixerwerten und entferntem Pending-Marker bleibt offen.
+- Die reale Neuinstallation überführte die ursprüngliche `/boot/firmware/config.txt` sauber in den vorgesehenen ELENATA-Zustand: konkurrierende alte Werte wurden entfernt oder deaktiviert und die vollständigen Zielwerte einmalig im wirksamen Abschnitt `[all]` eingetragen.
 
 ## Reale ELENATA-/Fe-Pi-Referenz
 

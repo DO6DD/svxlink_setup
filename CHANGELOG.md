@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Realen ELENATA-Postboot-Fehlerpfad auf `we10-test` dokumentiert: Ohne Audio-Karte startet der Dienst nach dem Variablenfix, prüft 45-mal über rund 90 Sekunden und scheitert anschließend kontrolliert mit erhaltenem Pending-Marker. Dies ist kein Hardware-Erfolgstest; erfolgreicher Mixer-/Kartenbetrieb bleibt offen. Die reale Neuinstallation bestätigte zusätzlich die einmalige, bereinigte ELENATA-Überführung von `/boot/firmware/config.txt` im Abschnitt `[all]`.
+
 - Logrotate rotiert wieder als root: `su svxlink svxlink` wurde aus der erzeugten Konfiguration entfernt, weil es im root-eigenen `/var/log` keine Datei `svxlink.1` anlegen kann. `copytruncate` sowie Eigentümer und Modus der aktiven Logdatei bleiben unverändert.
 
 - ELENATA-Post-Boot-Helper korrigiert: Die Unit ist nun der einzige produktive Ladeweg für die Mixerumgebung über `EnvironmentFile=`. Das zusätzliche `source "${ELENATA_ALSA_CONFIG_FILE}"`, das ohne gesetzte Variable mit `unbound variable` abbrach, wurde entfernt. Kein realer ELENATA-Hardwaretest wird damit behauptet.

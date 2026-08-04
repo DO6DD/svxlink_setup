@@ -79,15 +79,17 @@ assert_production_paths_unchanged() {
 enable_german_curl_mock() {
     # shellcheck disable=SC2317
     curl() {
-        local argument config_file='' output_file=''
+        local argument config_file='' output_file='' head=false
         while (($#)); do
             argument=$1
             case ${argument} in
                 --config) config_file=$2; shift 2 ;;
-                -o) output_file=$2; shift 2 ;;
+                --head) head=true; shift ;;
+                -o|--output) output_file=$2; shift 2 ;;
                 *) shift ;;
             esac
         done
+        if ${head}; then printf '%s' "$(stat -c %s "${GERMAN_SOUND_TEST_ARCHIVE}")"; return 0; fi
         printf 'curl\n' >>"${TEMP_DIR}/german-curl-calls"
         printf '%s\n' "${config_file}" >"${TEMP_DIR}/german-curl-config-path"
         printf '%s\n' "${output_file}" >"${TEMP_DIR}/german-curl-output-path"
@@ -151,7 +153,9 @@ mkdir -p "${SVXLINK_SOUNDS_DIR}/de_DE"
 printf previous >"${SVXLINK_SOUNDS_DIR}/de_DE/previous.txt"
 german_previous_hash=$(find "${SVXLINK_SOUNDS_DIR}/de_DE" -type f -exec sha256sum {} + | sha256sum | awk '{print $1}')
 GERMAN_SOUND_TEST_MODE=unauthorized
+german_curl_calls=$(wc -l <"${TEMP_DIR}/german-curl-calls")
 if install_german_sounds >"${TEMP_DIR}/german-401.out" 2>&1; then fail 'HTTP 401 must fail German download'; else pass 'HTTP 401 rejects German download'; fi
+expect_value "$(( $(wc -l <"${TEMP_DIR}/german-curl-calls") - german_curl_calls ))" 3 'HTTP 401 uses exactly three password attempts'
 grep -Fq 'Bei HTTP 401 bitte Passwort und Zugriffsrechte prüfen.' "${TEMP_DIR}/german-401.out" && pass 'HTTP 401 emits clear German authentication error' || fail 'HTTP 401 must emit clear German authentication error'
 expect_value "$(find "${SVXLINK_SOUNDS_DIR}/de_DE" -type f -exec sha256sum {} + | sha256sum | awk '{print $1}')" "${german_previous_hash}" 'HTTP 401 leaves existing German sounds unchanged'
 [[ ! -e $(cat "${TEMP_DIR}/german-curl-config-path") && ! -e $(cat "${TEMP_DIR}/german-curl-output-path") ]] && pass 'German temporary credentials and download removed after HTTP 401' || fail 'German temporary files must be removed after HTTP 401'
