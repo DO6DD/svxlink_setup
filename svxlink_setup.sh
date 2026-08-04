@@ -508,7 +508,7 @@ sound_archive_is_safe() {
     local -a listings
     listing_file=$(mktemp) || return 1
     # shellcheck disable=SC2016
-    if ! run_logged 'Soundarchiv wird geprüft' bash -c 'tar -tvjf "$1" >"$2"' _ "${archive}" "${listing_file}"; then
+    if ! run_logged 'Soundarchiv wird geprüft' bash -c 'LC_ALL=C tar --numeric-owner --full-time --quoting-style=literal -tvjf "$1" >"$2"' _ "${archive}" "${listing_file}"; then
         rm -f -- "${listing_file}"
         log "Soundarchiv kann nicht gelesen werden: ${archive}"
         return 1
@@ -517,8 +517,23 @@ sound_archive_is_safe() {
     mapfile -t listings <"${listing_file}"
     rm -f -- "${listing_file}"
     for listing in "${listings[@]}"; do
-        entry=${listing% -> *}
-        entry=${entry##* }
+        # GNU tar emits fixed metadata followed by one literal space and the
+        # member name.  Capture the remaining text verbatim: member names may
+        # themselves contain spaces, tabs, '#', or Unicode characters.
+        if [[ ${listing} =~ ^(.{10})\ [0-9]+/[0-9]+[[:space:]]+[0-9]+\ [0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?\ (.*)$ ]]; then
+            type=${BASH_REMATCH[1]:0:1}
+            entry=${BASH_REMATCH[3]}
+        else
+            log "Soundarchiv enthält eine nicht lesbare Tar-Auflistung: ${listing}"
+            return 1
+        fi
+        if [[ ${type} == l ]]; then
+            link_target=${entry##* -> }
+            entry=${entry% -> "${link_target}"}
+            [[ ${entry} != "${link_target}" ]] || {
+                log "Soundarchiv enthält einen nicht lesbaren symbolischen Link: ${listing}"; return 1;
+            }
+        fi
         required_parent=false
         parent=${expected_root}
         while [[ ${parent} == */* ]]; do
@@ -537,7 +552,6 @@ sound_archive_is_safe() {
         [[ ${entry} != *'/.git/'* && ${entry} != */.git && ${entry} != *'/.svn/'* && ${entry} != */.svn && ${entry} != *.svn-base && ${entry} != *.tcl ]] || {
             log "Soundarchiv enthält einen unzulässigen Eintrag: ${entry}"; return 1;
         }
-        type=${listing:0:1}
         if ${required_parent}; then
             [[ ${type} == d ]] || {
                 log "Soundarchiv enthält einen nicht unterstützten Vorfahrentyp: ${listing}"; return 1;
@@ -545,7 +559,6 @@ sound_archive_is_safe() {
             continue
         fi
         if [[ ${type} == l ]]; then
-            link_target=${listing##* -> }
             [[ ${link_target} != /* && ${link_target} != .. && ${link_target} != ../* && ${link_target} != */../* && ${link_target} != */.. ]] || {
                 log "Soundarchiv enthält einen unsicheren symbolischen Link: ${listing}"; return 1;
             }
@@ -1962,8 +1975,10 @@ run_installation() {
     fi
     install_packages
     require_base_tools || die "Grundabhängigkeiten fehlen; SvxLink-Build wurde nicht gestartet."
+    print_info 'Installation wird vorbereitet ...'
     disable_automatic_updates
     ensure_svxlink_account
+    print_success 'Installation wird vorbereitet'
     build_svxlink "$([[ ${mode} == force ]] && printf true || printf false)" || return 1
     configure_logging
     configure_base_svxlink

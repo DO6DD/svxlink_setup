@@ -113,6 +113,18 @@ printf x >"${TEMP_DIR}/real-layout/sounds/de_DE/Core/online.wav"
 printf x >"${TEMP_DIR}/real-layout/sounds/en_US/unexpected.wav"
 tar -cjf "${TEMP_DIR}/real-layout.tar.bz2" --no-recursion -C "${TEMP_DIR}/real-layout" sounds sounds/de_DE sounds/de_DE/Core
 sound_archive_is_safe "${TEMP_DIR}/real-layout.tar.bz2" sounds/de_DE && pass 'archive accepts required parent directories of sounds/de_DE' || fail 'archive must accept required parent directories'
+mkdir -p "${TEMP_DIR}/special-names/sounds/de_DE"
+printf x >"${TEMP_DIR}/special-names/sounds/de_DE/Verkehr Info #9.wav"
+printf x >"${TEMP_DIR}/special-names/sounds/de_DE/mehrere   Leerzeichen.wav"
+printf x >"${TEMP_DIR}/special-names/sounds/de_DE/Tab$(printf '\t')Name.wav"
+printf x >"${TEMP_DIR}/special-names/sounds/de_DE/Grüße.wav"
+tar -cjf "${TEMP_DIR}/special-names.tar.bz2" -C "${TEMP_DIR}/special-names" sounds
+sound_archive_is_safe "${TEMP_DIR}/special-names.tar.bz2" sounds/de_DE && pass 'archive accepts spaces, #, tabs, and Unicode in valid member names' || fail 'valid special member names must be retained exactly'
+mkdir -p "${TEMP_DIR}/root-file/sounds/de_DE"
+printf x >"${TEMP_DIR}/root-file/sounds/de_DE/online.wav"
+printf x >"${TEMP_DIR}/root-file/#9.wav"
+tar -cjf "${TEMP_DIR}/root-file.tar.bz2" -C "${TEMP_DIR}/root-file" sounds '#9.wav'
+if sound_archive_is_safe "${TEMP_DIR}/root-file.tar.bz2" sounds/de_DE; then fail 'root #9.wav must be rejected'; else pass 'archive rejects genuine root #9.wav'; fi
 tar -cjf "${TEMP_DIR}/sibling-layout.tar.bz2" -C "${TEMP_DIR}/real-layout" sounds
 if sound_archive_is_safe "${TEMP_DIR}/sibling-layout.tar.bz2" sounds/de_DE; then fail 'archive sibling path must be rejected'; else pass 'archive rejects sounds/en_US sibling path'; fi
 mkdir -p "${TEMP_DIR}/escaping-link/sounds/de_DE/Core"
