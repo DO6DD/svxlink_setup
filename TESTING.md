@@ -52,7 +52,7 @@ Erwartet und real bestätigt: unveränderter Quellstand und Releaseversion `26.0
 
 ## Simuliert validiert
 
-- `tests/simulate_package_installation.sh` prüft die vollständige allgemeine Paketliste, dokumentierte SigC++-/Gcrypt-Kompatibilitätsauflösung und die Pi-exklusive Kernel-Header-Ergänzung.
+- `tests/simulate_package_installation.sh` prüft die vollständige allgemeine Paketliste und die dokumentierte SigC++-/Gcrypt-Kompatibilitätsauflösung. `raspberrypi-kernel-headers` wird nicht mehr angefordert: Ein realer Neuinstallationstest zeigte dafür auf dem Zielsystem keinen Kandidaten; ELENATA baut kein externes Kernelmodul.
 - `tests/simulate_build_progress.sh` prüft Prozentanzeige, vollständiges Buildlog, Fehlerstatus, Fehlerauszug und nichtinteraktiven Fallback.
 
 - Die ELENATA-Simulation prüft die vom Hauptskript selbst erzeugte einmalige Post-Boot-ALSA-Unit, das Hilfsskript, Pending und sichere Modi. SvxLink wird dabei nicht gestartet.

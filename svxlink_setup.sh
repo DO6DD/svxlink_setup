@@ -728,10 +728,6 @@ install_packages() {
 
     resolve_package_alias packages libsigc++-dev libsigc++-2.0-dev
     resolve_package_alias packages libgcrypt-dev libgcrypt20-dev
-    if ${IS_RASPBERRY_PI}; then
-        package_has_candidate raspberrypi-kernel-headers || die 'Required Raspberry Pi package is unavailable: raspberrypi-kernel-headers.'
-        append_package_once packages raspberrypi-kernel-headers
-    fi
 
     run_logged 'Paketquellen werden aktualisiert' apt-get update || return 1
     run_logged 'Grundabhängigkeiten werden installiert' env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "${packages[@]}"

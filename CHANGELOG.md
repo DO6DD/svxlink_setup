@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Paketinstallation um die vollständige angeforderte Abhängigkeitsmenge erweitert; SigC++-/Gcrypt-Kompatibilitätsnamen werden explizit aufgelöst und Raspberry-Pi-Kernel-Header nur auf Raspberry Pi angefordert.
+- Paketinstallation um die vollständige angeforderte Abhängigkeitsmenge erweitert; SigC++-/Gcrypt-Kompatibilitätsnamen werden explizit aufgelöst. `raspberrypi-kernel-headers` wurde entfernt, weil es auf dem realen Zielsystem nicht verfügbar war und ELENATA kein externes Kernelmodul baut.
 
 - Dokumentation an Code, Simulationen und bekannte VM-/Raspberry-Pi-Nachweise angeglichen; veraltete Branch-, Commit-, Mixer-, Debian-, Root- und Repositoryangaben bereinigt.
 

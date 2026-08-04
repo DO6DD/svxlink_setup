@@ -31,14 +31,7 @@ general_command=$(tail -n 1 "${TEMP_DIR}/commands")
 for package in "${required_packages[@]}"; do
     if [[ ${general_command} == *" ${package}"* ]]; then pass "general package ${package}"; else fail "missing general package ${package}"; fi
 done
-if [[ ${general_command} != *raspberrypi-kernel-headers* ]]; then pass 'non-Pi excludes Raspberry Pi kernel headers'; else fail 'non-Pi includes Raspberry Pi kernel headers'; fi
 if [[ ${general_command} == *'libsigc++-2.0-dev'* && ${general_command} == *'libgcrypt20-dev'* ]]; then pass 'requested compatibility packages are resolved'; else fail 'compatibility packages are not resolved'; fi
-
-: >"${TEMP_DIR}/commands"
-IS_RASPBERRY_PI=true
-install_packages
-pi_command=$(tail -n 1 "${TEMP_DIR}/commands")
-if [[ ${pi_command} == *raspberrypi-kernel-headers* ]]; then pass 'Pi includes Raspberry Pi kernel headers'; else fail 'Pi misses Raspberry Pi kernel headers'; fi
 
 printf 'Erfolgreich: %d\nFehler: %d\n' "${successes}" "${failures}"
 (( failures == 0 ))

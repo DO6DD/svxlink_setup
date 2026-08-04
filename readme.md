@@ -16,7 +16,7 @@ Read-only status, help and configuration display work without root; write action
 
 Before a build, the installer installs and verifies required tools including `curl`, `tar`, `bzip2`, checksum, Git and build tools. Status output uses textual status labels; ANSI colors are used only on a terminal and are disabled by `NO_COLOR` and redirected output.
 
-The dependency set includes build tools, audio, RTL-SDR, I²C, documentation and diagnostic packages. `raspberrypi-kernel-headers` is added only on a detected Raspberry Pi. On Debian 12/13, the installer logs compatibility resolution of virtual `libgcrypt-dev` to `libgcrypt20-dev` and of unavailable `libsigc++-dev` to `libsigc++-2.0-dev`.
+The dependency set includes build tools, audio, RTL-SDR, I²C, documentation and diagnostic packages. A real fresh-installation test showed that `raspberrypi-kernel-headers` is unavailable on the target system and unnecessarily blocked installation, so it is not installed. ELENATA uses the existing `fe-pi-audio` overlay and does not build an external kernel module. On Debian 12/13, the installer logs compatibility resolution of virtual `libgcrypt-dev` to `libgcrypt20-dev` and of unavailable `libsigc++-dev` to `libsigc++-2.0-dev`.
 
 Normal updates deliberately use the official SvxLink repository `https://github.com/sm0svx/svxlink.git` and its `master` branch, not automatically selected release tags. `/var/lib/svxlink-setup/build-state` retains the exact source commit and detected SvxLink version alongside platform, compiler and CMake option signature. Matching builds are skipped; forced reinstallations always rebuild. Technical command output is recorded in `/var/log/svxlink-setup/` while the terminal remains concise.
 
