@@ -503,11 +503,18 @@ sound_wav_count() {
 }
 
 sound_archive_is_safe() {
-    local archive=$1 expected_root=$2 entry type listing link_target
+    local archive=$1 expected_root=$2 entry type listing link_target parent
+    local -a entries listings
     tar -tjf "${archive}" >/dev/null 2>&1 || { log "Soundarchiv kann nicht gelesen werden: ${archive}"; return 1; }
 
-    while IFS= read -r entry; do
-        [[ ${entry} == "${expected_root}/"* || ${entry} == "${expected_root}" ]] || {
+    mapfile -t entries < <(tar -tjf "${archive}")
+    for entry in "${entries[@]}"; do
+        parent=${expected_root}
+        while [[ ${parent} == */* ]]; do
+            parent=${parent%/*}
+            [[ ${entry} == "${parent}" || ${entry} == "${parent}/" ]] && continue 2
+        done
+        [[ ${entry} == "${expected_root}/"* || ${entry} == "${expected_root}" || ${entry} == "${expected_root}/" ]] || {
             log "Soundarchiv enthält einen unerwarteten Pfad: ${entry}"; return 1;
         }
         [[ ${entry} != /* && ${entry} != *'../'* && ${entry} != '..' ]] || {
@@ -516,9 +523,10 @@ sound_archive_is_safe() {
         [[ ${entry} != *'/.git/'* && ${entry} != */.git && ${entry} != *'/.svn/'* && ${entry} != */.svn && ${entry} != *.svn-base && ${entry} != *.tcl ]] || {
             log "Soundarchiv enthält einen unzulässigen Eintrag: ${entry}"; return 1;
         }
-    done < <(tar -tjf "${archive}")
+    done
 
-    while IFS= read -r listing; do
+    mapfile -t listings < <(tar -tvjf "${archive}")
+    for listing in "${listings[@]}"; do
         type=${listing:0:1}
         if [[ ${type} == l ]]; then
             link_target=${listing##* -> }
@@ -530,7 +538,7 @@ sound_archive_is_safe() {
         [[ ${type} == '-' || ${type} == 'd' ]] || {
             log "Soundarchiv enthält einen nicht unterstützten Eintragstyp: ${listing}"; return 1;
         }
-    done < <(tar -tvjf "${archive}")
+    done
     return 0
 }
 
@@ -1350,6 +1358,7 @@ start_activity_indicator() {
     local label=$1 command_pid=$2 kind='WORK'
     activity_indicator_enabled || return 0
     [[ ${label,,} == *herunter* ]] && kind='DOWNLOAD'
+    terminal_printf '\r[%s] | %s' "${kind}" "${label}"
     (
         local frame=0
         local -a frames=('|' '/' '-' "\\")
@@ -1373,6 +1382,7 @@ stop_activity_indicator() {
 start_download_progress() {
     local label=$1 command_pid=$2 target=$3 total=$4
     activity_indicator_enabled || return 0
+    terminal_printf '\r[DOWNLOAD] %s:   0 %%' "${label}"
     ( local size percent; while kill -0 "${command_pid}" 2>/dev/null; do size=$(stat -c %s "${target}" 2>/dev/null || printf 0); percent=$(( size * 100 / total )); (( percent <= 100 )) || percent=100; terminal_printf '\r[DOWNLOAD] %s: %3d %%' "${label}" "${percent}"; sleep 0.1; done ) &
     ACTIVITY_PID=$!
 }
@@ -1968,7 +1978,7 @@ run_installation() {
         print_info 'Die Grundinstallation ist abgeschlossen.'
         print_info 'Profil 0 erstellt keine produktive Audio-, PTT- oder Squelch-Konfiguration.'
     else
-        log "Installation completed. Verify the hardware with sudo ./${SCRIPT_NAME} --check before starting operation."
+        log "Installation abgeschlossen. Prüfe die Hardware vor der Inbetriebnahme mit sudo ./${SCRIPT_NAME} --check."
     fi
     if [[ ${HARDWARE_PROFILE} == 4 ]]; then
         printf '\n============================================================\nNEUSTART ERFORDERLICH\n============================================================\nDie ELENATA-Bootkonfiguration wurde vorbereitet.\n\nBitte jetzt neu starten:\n\n  reboot\n\nNach dem Neustart die Hardware prüfen und anschließend SvxLink starten.\n============================================================\n'
@@ -2008,7 +2018,7 @@ create_full_backup() {
 }
 
 list_backups() {
-    [[ -d ${SVXLINK_BACKUP_DIR} ]] || { log "No backups found."; return 0; }
+    [[ -d ${SVXLINK_BACKUP_DIR} ]] || { log "Keine Backups gefunden."; return 0; }
     find "${SVXLINK_BACKUP_DIR}" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort
 }
 
@@ -2119,8 +2129,8 @@ run_menu() {
             3) require_root_for_action --backup && backup_menu ;;
             4) if require_root_for_action --install-german-sounds; then install_sound_interactively de_DE || log 'Installation der deutschen Sounds fehlgeschlagen.'; fi ;;
             5) if require_root_for_action --install-english-sounds; then install_sound_interactively en_US || log 'Installation der englischen Sounds fehlgeschlagen.'; fi ;;
-            6) if require_root_for_action --activate-german-sounds; then show_german_activation_information; activate_sound_language de_DE true || log "German was not activated."; fi ;;
-            7) if require_root_for_action --activate-english-sounds; then activate_sound_language en_US true || log "English was not activated."; fi ;;
+            6) if require_root_for_action --activate-german-sounds; then show_german_activation_information; activate_sound_language de_DE true || log "Deutsch wurde nicht aktiviert."; fi ;;
+            7) if require_root_for_action --activate-english-sounds; then activate_sound_language en_US true || log "Englisch wurde nicht aktiviert."; fi ;;
             8) show_configuration ;;
             9) return 0 ;;
             *) log "Ungültige Auswahl." ;;

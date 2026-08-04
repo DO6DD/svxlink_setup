@@ -108,6 +108,14 @@ source "${ROOT}/svxlink_setup.sh"
 trap - ERR
 test_line '[TEST]' 'Soundverwaltungs-Simulation'
 
+mkdir -p "${TEMP_DIR}/real-layout/sounds/de_DE/Core" "${TEMP_DIR}/real-layout/sounds/en_US"
+printf x >"${TEMP_DIR}/real-layout/sounds/de_DE/Core/online.wav"
+printf x >"${TEMP_DIR}/real-layout/sounds/en_US/unexpected.wav"
+tar -cjf "${TEMP_DIR}/real-layout.tar.bz2" --no-recursion -C "${TEMP_DIR}/real-layout" sounds sounds/de_DE sounds/de_DE/Core
+sound_archive_is_safe "${TEMP_DIR}/real-layout.tar.bz2" sounds/de_DE && pass 'archive accepts required parent directories of sounds/de_DE' || fail 'archive must accept required parent directories'
+tar -cjf "${TEMP_DIR}/sibling-layout.tar.bz2" -C "${TEMP_DIR}/real-layout" sounds
+if sound_archive_is_safe "${TEMP_DIR}/sibling-layout.tar.bz2" sounds/de_DE; then fail 'archive sibling path must be rejected'; else pass 'archive rejects sounds/en_US sibling path'; fi
+
 require_root() { :; }
 snapshot_production_paths before
 
