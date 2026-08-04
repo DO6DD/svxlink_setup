@@ -104,5 +104,10 @@ printf 'Antwort\n' | NO_COLOR=1 TERM=xterm-256color SVXLINK_TEST_MODE=true SVXLI
 ' _ "${ROOT}" >"${plain_prompt_output}" 2>&1
 if grep -Fq 'Auswahl: ' "${plain_prompt_output}" && ! grep -q $'\033\|\[EINGABE\]' "${plain_prompt_output}"; then pass 'NO_COLOR keeps prompts readable without prefix'; else fail 'NO_COLOR prompt formatting is incorrect'; fi
 
+cleanup_output="${TEMP_DIR}/cleanup.out"
+SVXLINK_TEST_MODE=true SVXLINK_DEBUG_LOG_DIR="${TEMP_DIR}/cleanup-debug" bash "${ROOT}/svxlink_setup.sh" -D --help >"${cleanup_output}" 2>&1
+cleanup_log=$(find "${TEMP_DIR}/cleanup-debug" -name 'debug-*.log' -print -quit)
+if ! grep -Eq 'close_output_fds|: exec|main: exit=0: exit 0|\[\[ -z [0-9]+' "${cleanup_output}" && grep -Fq 'show_help' "${cleanup_log}"; then pass 'debug cleanup hides internal xtrace while retaining prior trace'; else fail 'debug cleanup must hide only internal cleanup trace'; fi
+
 printf 'Erfolgreich: %d\nFehler: %d\n' "${successes}" "${failures}"
 (( failures == 0 ))

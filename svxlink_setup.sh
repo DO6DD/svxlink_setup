@@ -246,6 +246,7 @@ require_base_tools() {
 
 on_error() {
     local exit_code=$?
+    set +x
     [[ -z ${ACTIVE_COMMAND_PID} ]] || kill "${ACTIVE_COMMAND_PID}" 2>/dev/null || true
     stop_activity_indicator
     log "ERROR: command failed at line ${BASH_LINENO[0]} (exit ${exit_code})"
@@ -503,18 +504,31 @@ sound_wav_count() {
 }
 
 sound_archive_is_safe() {
-    local archive=$1 expected_root=$2 entry type listing link_target parent
-    local -a entries listings
-    tar -tjf "${archive}" >/dev/null 2>&1 || { log "Soundarchiv kann nicht gelesen werden: ${archive}"; return 1; }
+    local archive=$1 expected_root=$2 entry type listing link_target parent listing_file required_parent=false
+    local -a listings
+    listing_file=$(mktemp) || return 1
+    # shellcheck disable=SC2016
+    if ! run_logged 'Soundarchiv wird geprüft' bash -c 'tar -tvjf "$1" >"$2"' _ "${archive}" "${listing_file}"; then
+        rm -f -- "${listing_file}"
+        log "Soundarchiv kann nicht gelesen werden: ${archive}"
+        return 1
+    fi
 
-    mapfile -t entries < <(tar -tjf "${archive}")
-    for entry in "${entries[@]}"; do
+    mapfile -t listings <"${listing_file}"
+    rm -f -- "${listing_file}"
+    for listing in "${listings[@]}"; do
+        entry=${listing% -> *}
+        entry=${entry##* }
+        required_parent=false
         parent=${expected_root}
         while [[ ${parent} == */* ]]; do
             parent=${parent%/*}
-            [[ ${entry} == "${parent}" || ${entry} == "${parent}/" ]] && continue 2
+            if [[ ${entry} == "${parent}" || ${entry} == "${parent}/" ]]; then
+                required_parent=true
+                break
+            fi
         done
-        [[ ${entry} == "${expected_root}/"* || ${entry} == "${expected_root}" || ${entry} == "${expected_root}/" ]] || {
+        ${required_parent} || [[ ${entry} == "${expected_root}/"* || ${entry} == "${expected_root}" || ${entry} == "${expected_root}/" ]] || {
             log "Soundarchiv enthält einen unerwarteten Pfad: ${entry}"; return 1;
         }
         [[ ${entry} != /* && ${entry} != *'../'* && ${entry} != '..' ]] || {
@@ -523,14 +537,16 @@ sound_archive_is_safe() {
         [[ ${entry} != *'/.git/'* && ${entry} != */.git && ${entry} != *'/.svn/'* && ${entry} != */.svn && ${entry} != *.svn-base && ${entry} != *.tcl ]] || {
             log "Soundarchiv enthält einen unzulässigen Eintrag: ${entry}"; return 1;
         }
-    done
-
-    mapfile -t listings < <(tar -tvjf "${archive}")
-    for listing in "${listings[@]}"; do
         type=${listing:0:1}
+        if ${required_parent}; then
+            [[ ${type} == d ]] || {
+                log "Soundarchiv enthält einen nicht unterstützten Vorfahrentyp: ${listing}"; return 1;
+            }
+            continue
+        fi
         if [[ ${type} == l ]]; then
             link_target=${listing##* -> }
-            [[ ${link_target} != /* ]] || {
+            [[ ${link_target} != /* && ${link_target} != .. && ${link_target} != ../* && ${link_target} != */../* && ${link_target} != */.. ]] || {
                 log "Soundarchiv enthält einen unsicheren symbolischen Link: ${listing}"; return 1;
             }
             continue
@@ -613,7 +629,8 @@ install_sound_archive() (
 
     temporary=$(mktemp -d)
     trap 'rm -rf "${temporary}"' EXIT
-    if ! tar -xjf "${archive}" -C "${temporary}" --no-same-owner --no-same-permissions; then
+    # shellcheck disable=SC2016
+    if ! run_logged "$([[ ${language} == de_DE ]] && printf 'Deutsche Sounds werden entpackt' || printf 'Englische Sounds werden entpackt')" bash -c 'tar -xjf "$1" -C "$2" --no-same-owner --no-same-permissions' _ "${archive}" "${temporary}"; then
         log "Entpacken des Soundarchivs fehlgeschlagen: ${archive}"
         return 1
     fi
@@ -1405,6 +1422,7 @@ download_logged() {
 
 on_signal() {
     local exit_code=$1
+    set +x
     [[ -z ${ACTIVE_COMMAND_PID} ]] || kill "${ACTIVE_COMMAND_PID}" 2>/dev/null || true
     stop_activity_indicator
     exit "${exit_code}"
@@ -2202,6 +2220,7 @@ main() {
 }
 
 close_output_fds() {
+    set +x
     stop_activity_indicator
     [[ -z ${DEBUG_FD} ]] || exec {DEBUG_FD}>&-
     [[ -z ${DEBUG_STDOUT_FD} ]] || exec {DEBUG_STDOUT_FD}>&-
@@ -2211,6 +2230,7 @@ close_output_fds() {
 
 if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
     if main "$@"; then exit_code=0; else exit_code=$?; fi
+    set +x
     close_output_fds
     exit "${exit_code}"
 fi

@@ -115,6 +115,11 @@ tar -cjf "${TEMP_DIR}/real-layout.tar.bz2" --no-recursion -C "${TEMP_DIR}/real-l
 sound_archive_is_safe "${TEMP_DIR}/real-layout.tar.bz2" sounds/de_DE && pass 'archive accepts required parent directories of sounds/de_DE' || fail 'archive must accept required parent directories'
 tar -cjf "${TEMP_DIR}/sibling-layout.tar.bz2" -C "${TEMP_DIR}/real-layout" sounds
 if sound_archive_is_safe "${TEMP_DIR}/sibling-layout.tar.bz2" sounds/de_DE; then fail 'archive sibling path must be rejected'; else pass 'archive rejects sounds/en_US sibling path'; fi
+mkdir -p "${TEMP_DIR}/escaping-link/sounds/de_DE/Core"
+printf x >"${TEMP_DIR}/escaping-link/sounds/de_DE/Core/online.wav"
+ln -s ../../outside.wav "${TEMP_DIR}/escaping-link/sounds/de_DE/escape.wav"
+tar -cjf "${TEMP_DIR}/escaping-link.tar.bz2" -C "${TEMP_DIR}/escaping-link" sounds
+if sound_archive_is_safe "${TEMP_DIR}/escaping-link.tar.bz2" sounds/de_DE; then fail 'archive link escaping expected root must be rejected'; else pass 'archive rejects symbolic link escaping expected root'; fi
 
 require_root() { :; }
 snapshot_production_paths before
