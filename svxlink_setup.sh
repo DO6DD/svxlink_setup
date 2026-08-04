@@ -178,9 +178,9 @@ print_prompt() {
     local text=$1 prefix='' reset=''
     if output_uses_color; then prefix='\033[1;35m'; reset='\033[0m'; fi
     if [[ -n ${TERMINAL_FD} ]]; then
-        terminal_printf '%b[EINGABE]%b %s' "${prefix}" "${reset}" "${text}"
+        terminal_printf '%b%s%b' "${prefix}" "${text}" "${reset}"
     else
-        printf '%b[EINGABE]%b %s' "${prefix}" "${reset}" "${text}" >&2
+        printf '%b%s%b' "${prefix}" "${text}" "${reset}" >&2
     fi
 }
 

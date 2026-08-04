@@ -86,7 +86,7 @@ SVXLINK_TEST_MODE=true SVXLINK_INSTALL_LOG_DIR="${TEMP_DIR}/plain-install" bash 
 if ! grep -q $'\033\|\r\|\[WORK\]\|\[BUILD\]' "${plain_output}"; then pass 'noninteractive output has no colors, spinner, or progress line'; else fail 'noninteractive output must remain plain'; fi
 
 prompt_output="${TEMP_DIR}/prompt.out"
-printf 'Antwort\nGeheimnis\n' | TERM=xterm-256color SVXLINK_TEST_MODE=true SVXLINK_TEST_FORCE_INTERACTIVE_OUTPUT=true SVXLINK_DEBUG_LOG_DIR="${TEMP_DIR}/prompt-debug" bash -c '
+printf 'Antwort\nGeheimnis\n' | NO_COLOR='' TERM=xterm-256color SVXLINK_TEST_MODE=true SVXLINK_TEST_FORCE_INTERACTIVE_OUTPUT=true SVXLINK_DEBUG_LOG_DIR="${TEMP_DIR}/prompt-debug" bash -c '
     source "$1/svxlink_setup.sh"
     DEBUG_MODE=true
     start_debug_log
@@ -95,7 +95,14 @@ printf 'Antwort\nGeheimnis\n' | TERM=xterm-256color SVXLINK_TEST_MODE=true SVXLI
     [[ ${answer} == Antwort ]]
 ' _ "${ROOT}" >"${prompt_output}" 2>&1
 prompt_log=$(find "${TEMP_DIR}/prompt-debug" -name 'debug-*.log' -print -quit)
-if grep -Fq '[EINGABE] Installation jetzt starten? [j/N]: ' "${prompt_output}" && grep -Fq '[EINGABE] Passwort für die deutschen Sounds: ' "${prompt_output}" && ! grep -Fq Geheimnis "${prompt_log}"; then pass 'prompts stay visible and secret input stays out of debug log'; else fail 'prompts or secret logging are incorrect'; fi
+if grep -Fq $'\033[1;35mInstallation jetzt starten? [j/N]: \033[0m' "${prompt_output}" && grep -Fq $'\033[1;35mPasswort für die deutschen Sounds: \033[0m' "${prompt_output}" && ! grep -Fq '[EINGABE]' "${prompt_output}" && ! grep -Fq Geheimnis "${prompt_log}"; then pass 'debug prompts stay highlighted without prefix and secret input stays out of debug log'; else fail 'prompts or secret logging are incorrect'; fi
+
+plain_prompt_output="${TEMP_DIR}/plain-prompt.out"
+printf 'Antwort\n' | NO_COLOR=1 TERM=xterm-256color SVXLINK_TEST_MODE=true SVXLINK_TEST_FORCE_INTERACTIVE_OUTPUT=true bash -c '
+    source "$1/svxlink_setup.sh"
+    prompt_value answer "Auswahl: "
+' _ "${ROOT}" >"${plain_prompt_output}" 2>&1
+if grep -Fq 'Auswahl: ' "${plain_prompt_output}" && ! grep -q $'\033\|\[EINGABE\]' "${plain_prompt_output}"; then pass 'NO_COLOR keeps prompts readable without prefix'; else fail 'NO_COLOR prompt formatting is incorrect'; fi
 
 printf 'Erfolgreich: %d\nFehler: %d\n' "${successes}" "${failures}"
 (( failures == 0 ))
